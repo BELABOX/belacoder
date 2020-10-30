@@ -46,6 +46,13 @@ Where:
 Gstreamer pipelines
 -------------------
 
+The gstreamer pipelines are available in the `pipeline` directory, organised in machine-specific directories (or `generic` for software encoder / decoder pipelines). The filename format is `CODEC_CAPTUREDEV_[RES[FPS]]`:
+
+* `CODEC` is either `h265` or `h264`
+* `CAPTUREDEV` is either `camlink` for Elgato Cam Link 4K ([Amazon.com](https://amzn.to/2Hx3tFM) / [Amazon.co.uk](https://amzn.to/3jp32us)) or other YUY2 capture cards or `v4l_mjpeg` for low cost USB2.0 MJPEG capture cards ([Amazon.com](https://amzn.to/31VOTyS) / [Amazon.co.uk](https://amzn.to/3mwlNxU))
+* `RES` can be blank - capturing at the highest available resolution, `720p` or `1080p`
+* `FPS` can be blank - capturing at the highest available refresh rate, `29.97`, or `30` FPS
+
 Please check the supplied pipelines for examples. Here are a few unorganised tips & pointers:
 
 * belacoder will work with arbitrary gstreamer pipelines as long as they're valid, however for dynamic bitrate control the video encoder **must** have `name=video_enc` and it must have a `bitrate` property changeable in the running state; the sink **must** be `appsink name=appsink`, which will stream to the SRT IP and port specified as command line arguments
