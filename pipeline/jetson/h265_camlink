@@ -2,7 +2,7 @@ v4l2src !
 video/x-raw,format=YUY2 ! 
 textoverlay text='' valignment=top halignment=right font-desc="Sans, 10" name=overlay ! 
 nvvidconv interpolation-method=5 ! 
-nvv4l2h265enc control-rate=1 qp-range="28,50:0,38:0,50" iframeinterval=60 preset-level=4 maxperf-enable=true EnableTwopassCBR=true insert-sps-pps=true name=video_enc ! 
+nvv4l2h265enc control-rate=1 qp-range="28,50:0,38:0,50" iframeinterval=60 preset-level=4 maxperf-enable=true EnableTwopassCBR=true insert-sps-pps=true name=venc_bps ! 
 h265parse config-interval=-1 ! queue ! mux. 
 alsasrc device=hw:2 ! identity name=delay signal-handoffs=TRUE ! volume volume=1.0 ! 
 audioconvert ! avenc_aac bitrate=131072 ! aacparse ! queue ! mux. 

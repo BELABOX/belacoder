@@ -60,6 +60,8 @@ GstElement *encoder, *overlay;
 SRTSOCKET sock;
 struct sockaddr_in dest;
 
+int enc_bitrate_div = 1;
+
 int sound_delay = 0;
 
 int max_bitrate;
@@ -133,7 +135,7 @@ void update_bitrate() {
 
     // round the bitrate we set to 100 kbps
     bitrate = bitrate / (100 * 1000) * (100 * 1000);
-    g_object_set (G_OBJECT(encoder), "bitrate", bitrate, NULL);
+    g_object_set (G_OBJECT(encoder), "bitrate", bitrate / enc_bitrate_div, NULL);
 
     update_overlay(bitrate);
 
@@ -285,11 +287,15 @@ int main(int argc, char** argv) {
   cur_bitrate = max_bitrate;
   fprintf(stderr, "Max bitrate: %d\n", max_bitrate);
 
-  encoder = gst_bin_get_by_name(GST_BIN(gst_pipeline), "video_enc");
+  encoder = gst_bin_get_by_name(GST_BIN(gst_pipeline), "venc_bps");
+  if (!GST_IS_ELEMENT(encoder)) {
+    encoder = gst_bin_get_by_name(GST_BIN(gst_pipeline), "venc_kbps");
+    enc_bitrate_div = 1000;
+  }
   if (GST_IS_ELEMENT(encoder)) {
-    g_object_set (G_OBJECT(encoder), "bitrate", cur_bitrate, NULL);
+    g_object_set (G_OBJECT(encoder), "bitrate", cur_bitrate / enc_bitrate_div, NULL);
   } else {
-    fprintf(stderr, "Failed to get a video_enc element from the pipeline, "
+    fprintf(stderr, "Failed to get an encoder element from the pipeline, "
                     "no dynamic bitrate control\n");
     encoder = NULL;
   }
