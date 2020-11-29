@@ -218,6 +218,7 @@ void init_srt(char *ip, char *port) {
 
   sock = srt_create_socket();
 
+#if SRT_MAX_OHEAD > 0
   // auto, based on input rate
   int64_t max_bw = 0;
   ret = srt_setsockflag(sock, SRTO_MAXBW, &max_bw, sizeof(max_bw));
@@ -227,6 +228,7 @@ void init_srt(char *ip, char *port) {
   int32_t ohead = SRT_MAX_OHEAD;
   ret = srt_setsockflag(sock, SRTO_OHEADBW, &ohead, sizeof(ohead));
   assert(ret == 0);
+#endif
 
   ret = srt_connect(sock, (struct sockaddr*)&dest, sizeof(dest));
   assert(ret == 0);
