@@ -18,6 +18,7 @@
 
 #include <stdio.h>
 #include <assert.h>
+#include <signal.h>
 #include <sys/mman.h>
 
 #include <gst/gst.h>
@@ -30,6 +31,7 @@
 #define SRT_MAX_OHEAD 20 // maximum SRT transmission overhead (when using appsink)
 
 #define MIN_BITRATE (500 * 1000)
+#define ABS_MAX_BITRATE (30 * 1000 * 1000)
 #define DEF_BITRATE (6 * 1000 * 1000)
 #define BITRATE_UPDATE_INT  20 // buffer size sampling interval (ms)
 #define BS_INCR_MIN         12 // maximum buffer size to increase the bitrate when the current bitrate is low
@@ -65,8 +67,11 @@ int enc_bitrate_div = 1;
 
 int sound_delay = 0;
 
-int max_bitrate;
+int min_bitrate = MIN_BITRATE;
+int max_bitrate = DEF_BITRATE;
 int cur_bitrate = MIN_BITRATE;
+
+char *bitrate_filename = NULL;
 
 uint64_t getms() {
   struct timespec time = {0, 0};
@@ -80,6 +85,39 @@ void update_overlay(int bitrate) {
     snprintf(overlay_text, 100, "bitrate: %d", bitrate/1000);
     g_object_set (G_OBJECT(overlay), "text", overlay_text, NULL);
   }
+}
+
+int parse_bitrate(char *bitrate_string) {
+  int bitrate = strtol(bitrate_string, NULL, 10);
+  if (bitrate < MIN_BITRATE || bitrate > ABS_MAX_BITRATE) {
+    return -1;
+  }
+  return bitrate;
+}
+
+int read_bitrate_file() {
+  FILE *f = fopen(bitrate_filename, "r");
+  if (f == NULL) return -1;
+
+  char *buf = NULL;
+  size_t buf_sz = 0;
+  int br[2];
+
+  for (int i = 0; i < 2; i++) {
+    buf_sz = getline(&buf, &buf_sz, f);
+    if (buf_sz < 0) goto ret_err;
+    br[i] = parse_bitrate(buf);
+    if (br[i] < 0) goto ret_err;
+  }
+
+  free(buf);
+  min_bitrate = br[0];
+  max_bitrate = br[1];
+  return 0;
+
+ret_err:
+  if (buf) free(buf);
+  return -2;
 }
 
 void update_bitrate() {
@@ -132,7 +170,7 @@ void update_bitrate() {
   }
   prev_bs = avg_bs;
 
-  bitrate = min_max(bitrate, MIN_BITRATE, max_bitrate);
+  bitrate = min_max(bitrate, min_bitrate, max_bitrate);
 
   if (bitrate != cur_bitrate) {
     cur_bitrate = bitrate;
@@ -235,7 +273,14 @@ void init_srt(char *ip, char *port) {
 }
 
 void exit_syntax() {
-  fprintf(stderr, "Syntax: belacoder PIPELINE_FILE IP PORT DELAY(ms) [MAX_BITRATE(bps)]\n");
+  fprintf(stderr, "Syntax: belacoder PIPELINE_FILE IP PORT DELAY(ms) [BITRATE SETTING FILE]\n\n");
+  fprintf(stderr, "BITRATE SETTING FILE syntax:\n");
+  fprintf(stderr, "MIN BITRATE (bps)\n");
+  fprintf(stderr, "MAX BITRATE (bps)\n---\n");
+  fprintf(stderr, "example for 500 Kbps - 60000 Kbps:\n");
+  fprintf(stderr, "500000\n");
+  fprintf(stderr, "6000000\n---\n");
+  fprintf(stderr, "Send SIGHUP to reload the bitrate settings while running.\n");
   exit(EXIT_FAILURE);
 }
 
@@ -281,17 +326,21 @@ int main(int argc, char** argv) {
 
 
   // Optional dynamic video bitrate
-  if (argc == 5) {
-    max_bitrate = DEF_BITRATE;
-  } else if (argc == 6) {
-    max_bitrate = strtol(argv[5], NULL, 10);
-    if (max_bitrate < MIN_BITRATE || max_bitrate > 30*1024*1024) {
-      fprintf(stderr, "Invalid bitrate %d\n", max_bitrate);
+  if (argc == 6) {
+    bitrate_filename = argv[5];
+    int ret;
+    if ((ret = read_bitrate_file()) != 0) {
+      if (ret == -1) {
+        fprintf(stderr, "Failed to read the bitrate settings file %s\n", bitrate_filename);
+      } else {
+        fprintf(stderr, "Failed to read valid bitrate settings from %s\n", bitrate_filename);
+      }
       exit_syntax();
     }
   }
   cur_bitrate = max_bitrate;
   fprintf(stderr, "Max bitrate: %d\n", max_bitrate);
+  signal(SIGHUP, (__sighandler_t)read_bitrate_file);
 
   encoder = gst_bin_get_by_name(GST_BIN(gst_pipeline), "venc_bps");
   if (!GST_IS_ELEMENT(encoder)) {
