@@ -59,6 +59,7 @@
 #endif
 
 static GstPipeline *gst_pipeline = NULL;
+GMainLoop *loop;
 GstElement *encoder, *overlay;
 SRTSOCKET sock;
 struct sockaddr_in dest;
@@ -289,6 +290,21 @@ static void cb_delay (GstElement *identity, GstBuffer *buffer, gpointer data) {
    GST_BUFFER_PTS (buffer) += GST_SECOND * sound_delay / 1000;
 }
 
+void cb_pipeline (GstBus *bus, GstMessage *message, gpointer user_data) {
+  switch(GST_MESSAGE_TYPE(message)) {
+    case GST_MESSAGE_ERROR:
+      fprintf(stderr, "gstreamer error\n");
+      g_main_loop_quit(loop);
+      break;
+    case GST_MESSAGE_EOS:
+      fprintf(stderr, "gstreamer eos\n");
+      g_main_loop_quit(loop);
+      break;
+    default:
+      break;
+  }
+}
+
 int main(int argc, char** argv) {
   if (argc < 5 || argc > 6) {
     exit_syntax();
@@ -314,6 +330,9 @@ int main(int argc, char** argv) {
     return -1;
   }
   if (error) g_error_free(error);
+  GstBus *bus = gst_pipeline_get_bus(GST_PIPELINE(gst_pipeline));
+  gst_bus_add_signal_watch(bus);
+  g_signal_connect(bus, "message", (GCallback)cb_pipeline, gst_pipeline);
 
 
   // Optional SRT streaming via an appsink (needed for dynamic video bitrate)
@@ -377,12 +396,14 @@ int main(int argc, char** argv) {
   }
 
 
-  // Everything good so far, start the gstreamer pipeline
-  gst_element_set_state((GstElement*)gst_pipeline, GST_STATE_PLAYING);
-
-
+  loop = g_main_loop_new (NULL, FALSE);
+  /* If the gstreamer pipeline encounters an error, attempt to restart it
+     This could happen for example if the capture card is momentary unplugged */
   while(1) {
-    sleep(1);
+    // Everything good so far, start the gstreamer pipeline
+    gst_element_set_state((GstElement*)gst_pipeline, GST_STATE_PLAYING);
+    g_main_loop_run(loop);
+    gst_element_set_state((GstElement*)gst_pipeline, GST_STATE_NULL);
   }
 
   return 0;
