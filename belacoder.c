@@ -302,8 +302,8 @@ void exit_syntax() {
 }
 
 static void cb_delay (GstElement *identity, GstBuffer *buffer, gpointer data) {
-   buffer = gst_buffer_make_writable(buffer);
-   GST_BUFFER_PTS (buffer) += GST_SECOND * sound_delay / 1000;
+  buffer = gst_buffer_make_writable(buffer);
+  GST_BUFFER_PTS (buffer) += GST_SECOND * sound_delay / 1000;
 }
 
 void cb_pipeline (GstBus *bus, GstMessage *message, gpointer user_data) {
