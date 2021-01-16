@@ -287,13 +287,16 @@ int init_srt(char *host, char *port) {
 }
 
 void exit_syntax() {
-  fprintf(stderr, "Syntax: belacoder PIPELINE_FILE ADDR PORT DELAY(ms) [BITRATE SETTING FILE]\n\n");
-  fprintf(stderr, "BITRATE SETTING FILE syntax:\n");
+  fprintf(stderr, "Syntax: belacoder PIPELINE_FILE ADDR PORT [options]\n\n");
+  fprintf(stderr, "Options:\n");
+  fprintf(stderr, "  -d <delay>          Audio delay in milliseconds\n");
+  fprintf(stderr, "  -b <bitrate file>   Bitrate settings file, see below\n\n");
+  fprintf(stderr, "Bitrate settings file syntax:\n");
   fprintf(stderr, "MIN BITRATE (bps)\n");
   fprintf(stderr, "MAX BITRATE (bps)\n---\n");
-  fprintf(stderr, "example for 500 Kbps - 60000 Kbps:\n");
-  fprintf(stderr, "500000\n");
-  fprintf(stderr, "6000000\n---\n");
+  fprintf(stderr, "example for 500 Kbps - 60000 Kbps:\n\n");
+  fprintf(stderr, "    printf \"500000\\n6000000\" > bitrate_file\n\n");
+  fprintf(stderr, "---\n");
   fprintf(stderr, "Send SIGHUP to reload the bitrate settings while running.\n");
   exit(EXIT_FAILURE);
 }
@@ -318,16 +321,35 @@ void cb_pipeline (GstBus *bus, GstMessage *message, gpointer user_data) {
   }
 }
 
+#define FIXED_ARGS 3
 int main(int argc, char** argv) {
-  if (argc < 5 || argc > 6) {
+  int opt;
+  while ((opt = getopt(argc, argv, "d:b:f")) != -1) {
+    switch (opt) {
+      case 'b':
+        bitrate_filename = optarg;
+        break;
+      case 'd':
+        sound_delay = strtol(optarg, NULL, 10);
+        if (sound_delay < -MAX_SOUND_DELAY || sound_delay > MAX_SOUND_DELAY) {
+          fprintf(stderr, "Maximum sound delay +/- %d\n\n", MAX_SOUND_DELAY);
+          exit_syntax();
+        }
+        break;
+      default:
+        exit_syntax();
+    }
+  }
+
+  if (argc - optind < FIXED_ARGS) {
     exit_syntax();
   }
 
 
   // Read the pipeline file
-  int pipeline_fd = open(argv[1], O_RDONLY);
+  int pipeline_fd = open(argv[optind], O_RDONLY);
   if (pipeline_fd < 0) {
-    fprintf(stderr, "Failed to open the pipeline file %s: ", argv[1]);
+    fprintf(stderr, "Failed to open the pipeline file %s: ", argv[optind]);
     perror("");
     exit(EXIT_FAILURE);
   }
@@ -353,14 +375,13 @@ int main(int argc, char** argv) {
   GstElement *rtlasink = gst_bin_get_by_name(GST_BIN(gst_pipeline), "appsink");
   if (GST_IS_ELEMENT(rtlasink)) {
     gst_app_sink_set_callbacks (GST_APP_SINK(rtlasink), &callbacks, NULL, NULL);
-    int ret = init_srt(argv[2], argv[3]);
+    int ret = init_srt(argv[optind+1], argv[optind+2]);
     assert(ret == 0);
   }
 
 
   // Optional dynamic video bitrate
-  if (argc == 6) {
-    bitrate_filename = argv[5];
+  if (bitrate_filename) {
     int ret;
     if ((ret = read_bitrate_file()) != 0) {
       if (ret == -1) {
@@ -395,12 +416,7 @@ int main(int argc, char** argv) {
 
 
   // Optional sound delay via an identity element
-  sound_delay = strtol(argv[4], NULL, 10);
   fprintf(stderr, "Sound delay: %d ms\n", sound_delay);
-  if (sound_delay < -MAX_SOUND_DELAY || sound_delay > MAX_SOUND_DELAY) {
-    fprintf(stderr, "Maximum sound delay +/- %d\n", MAX_SOUND_DELAY);
-    exit_syntax();
-  }
   GstElement *identity_elem = gst_bin_get_by_name(GST_BIN(gst_pipeline), "delay");
   if (GST_IS_ELEMENT(identity_elem)) {
     g_object_set(G_OBJECT(identity_elem), "signal-handoffs", TRUE, NULL);
