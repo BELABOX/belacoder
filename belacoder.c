@@ -62,7 +62,6 @@ static GstPipeline *gst_pipeline = NULL;
 GMainLoop *loop;
 GstElement *encoder, *overlay;
 SRTSOCKET sock;
-struct sockaddr_in dest;
 
 int enc_bitrate_div = 1;
 
@@ -249,13 +248,18 @@ int parse_ip_port(struct sockaddr_in *addr, char *ip_str, char *port_str) {
   return 0;
 }
 
-void init_srt(char *ip, char *port) {
+int init_srt(char *host, char *port) {
+  struct addrinfo hints;
+  struct addrinfo *addrs;
+  memset(&hints, 0, sizeof(hints));
+  hints.ai_family = AF_UNSPEC;
+  hints.ai_socktype = SOCK_DGRAM;
+  int ret = getaddrinfo(host, port, &hints, &addrs);
+  if (ret != 0) return -1;
+
   srt_startup();
-
-  int ret = parse_ip_port(&dest, ip, port);
-  assert(ret == 0);
-
   sock = srt_create_socket();
+  if (sock == SRT_INVALID_SOCK) return -2;
 
 #if SRT_MAX_OHEAD > 0
   // auto, based on input rate
@@ -269,12 +273,21 @@ void init_srt(char *ip, char *port) {
   assert(ret == 0);
 #endif
 
-  ret = srt_connect(sock, (struct sockaddr*)&dest, sizeof(dest));
-  assert(ret == 0);
+  int connected = -3;
+  for (struct addrinfo *addr = addrs; addr != NULL; addr = addr->ai_next) {
+    ret = srt_connect(sock, addr->ai_addr, addr->ai_addrlen);
+    if (ret == 0) {
+      connected = 0;
+      continue;
+    }
+  }
+  freeaddrinfo(addrs);
+
+  return connected;
 }
 
 void exit_syntax() {
-  fprintf(stderr, "Syntax: belacoder PIPELINE_FILE IP PORT DELAY(ms) [BITRATE SETTING FILE]\n\n");
+  fprintf(stderr, "Syntax: belacoder PIPELINE_FILE ADDR PORT DELAY(ms) [BITRATE SETTING FILE]\n\n");
   fprintf(stderr, "BITRATE SETTING FILE syntax:\n");
   fprintf(stderr, "MIN BITRATE (bps)\n");
   fprintf(stderr, "MAX BITRATE (bps)\n---\n");
@@ -340,7 +353,8 @@ int main(int argc, char** argv) {
   GstElement *rtlasink = gst_bin_get_by_name(GST_BIN(gst_pipeline), "appsink");
   if (GST_IS_ELEMENT(rtlasink)) {
     gst_app_sink_set_callbacks (GST_APP_SINK(rtlasink), &callbacks, NULL, NULL);
-    init_srt(argv[2], argv[3]);
+    int ret = init_srt(argv[2], argv[3]);
+    assert(ret == 0);
   }
 
 

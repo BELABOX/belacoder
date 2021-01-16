@@ -32,12 +32,22 @@ Building belacoder:
 Usage
 -----
 
-    ./belacoder PIPELINE_FILE IP PORT DELAY(ms) [MAX_BITRATE(bps)]
+    Syntax: belacoder PIPELINE_FILE ADDR PORT DELAY(ms) [BITRATE SETTING FILE]
+
+    BITRATE SETTING FILE syntax:
+    MIN BITRATE (bps)
+    MAX BITRATE (bps)
+    ---
+    example for 500 Kbps - 60000 Kbps:
+    500000
+    6000000
+    ---
+    Send SIGHUP to reload the bitrate settings while running.
 
 Where:
 
 * `PIPELINE_FILE` is a text file containing the gstreamer pipeline to use. See the `pipeline` directory for ready-made pipelines.
-* `IP` is the IP address of the SRT listener to stream to (only applicable when the gstreamer sink is `appsink name=appsink`)
+* `ADDR` is the hostname or IP address of the SRT listener to stream to (only applicable when the gstreamer sink is `appsink name=appsink`)
 * `PORT` is the port of the SRT listener to stream to (only applicable when the gstreamer sink is `appsink name=appsink`)
 * `DELAY` is the delay in milliseconds to add to the audio stream relative to the video (when using the gstreamer pipelines supplied with belacoder)
 * `MAX_BITRATE` is an optional argument for setting the maximum **video** bitrate (when using the gstreamer pipelines supplied with belacoder)
