@@ -2,7 +2,6 @@ v4l2src !
 image/jpeg,width=1280,height=720,framerate=30/1 ! jpegparse ! jpegdec ! 
 textoverlay text='' valignment=top halignment=right font-desc="Sans, 10" name=overlay ! 
 videoconvert ! 
-identity name=framedrop signal-handoffs=TRUE ! identity drop-buffer-flags=GST_BUFFER_FLAG_DROPPABLE ! 
 x264enc speed-preset=2 key-int-max=60 name=venc_kbps ! 
 h264parse config-interval=-1 ! queue ! mux. 
 alsasrc device=hw:2 ! identity name=delay signal-handoffs=TRUE ! volume volume=1.0 ! 

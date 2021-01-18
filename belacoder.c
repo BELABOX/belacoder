@@ -120,11 +120,6 @@ ret_err:
   return -2;
 }
 
-int get_scaled_bs_decr() {
-  int scaled_bs_decr = BS_DECR_MIN + (int)(BS4M_DECR * (double)cur_bitrate/(4*1000*1000));
-  return scaled_bs_decr;
-}
-
 void update_bitrate() {
   static double avg_bs = 0;
   static double prev_bs = 0;
@@ -154,7 +149,7 @@ void update_bitrate() {
 
   // Scale the buffer size thresholds depending on the current bitrate
   double scaled_incr_bs = max(BS_INCR_MIN, BS4M_INCR * (double)cur_bitrate/(4*1000*1000));
-  int scaled_bs_decr = get_scaled_bs_decr();
+  int scaled_bs_decr = BS_DECR_MIN + (int)(BS4M_DECR * (double)cur_bitrate/(4*1000*1000));
 
   int bitrate = cur_bitrate;
 
@@ -295,8 +290,7 @@ void exit_syntax() {
   fprintf(stderr, "Syntax: belacoder PIPELINE_FILE ADDR PORT [options]\n\n");
   fprintf(stderr, "Options:\n");
   fprintf(stderr, "  -d <delay>          Audio delay in milliseconds\n");
-  fprintf(stderr, "  -b <bitrate file>   Bitrate settings file, see below\n");
-  fprintf(stderr, "  -f                  Enable framedropping when the SRT framebuffer overfills\n\n");
+  fprintf(stderr, "  -b <bitrate file>   Bitrate settings file, see below\n\n");
   fprintf(stderr, "Bitrate settings file syntax:\n");
   fprintf(stderr, "MIN BITRATE (bps)\n");
   fprintf(stderr, "MAX BITRATE (bps)\n---\n");
@@ -310,21 +304,6 @@ void exit_syntax() {
 static void cb_delay (GstElement *identity, GstBuffer *buffer, gpointer data) {
   buffer = gst_buffer_make_writable(buffer);
   GST_BUFFER_PTS (buffer) += GST_SECOND * sound_delay / 1000;
-}
-
-static void cb_framedrop (GstElement *identity, GstBuffer *buffer, gpointer data) {
-  int bs = -1;
-  int sz = sizeof(bs);
-  int ret = srt_getsockflag(sock, SRTO_SNDDATA, &bs, &sz);
-
-  if (ret < 0 || bs < 0) {
-    return;
-  }
-
-  if (bs > (get_scaled_bs_decr() * 2)) {
-    buffer = gst_buffer_make_writable(buffer);
-    GST_BUFFER_FLAG_SET(buffer, GST_BUFFER_FLAG_DROPPABLE);
-  }
 }
 
 void cb_pipeline (GstBus *bus, GstMessage *message, gpointer user_data) {
@@ -344,16 +323,11 @@ void cb_pipeline (GstBus *bus, GstMessage *message, gpointer user_data) {
 
 #define FIXED_ARGS 3
 int main(int argc, char** argv) {
-  int framedropping = 0;
-
   int opt;
   while ((opt = getopt(argc, argv, "d:b:f")) != -1) {
     switch (opt) {
       case 'b':
         bitrate_filename = optarg;
-        break;
-      case 'f':
-        framedropping = 1;
         break;
       case 'd':
         sound_delay = strtol(optarg, NULL, 10);
@@ -441,25 +415,12 @@ int main(int argc, char** argv) {
   update_overlay(cur_bitrate);
 
 
-  // Optional framedropping
-  fprintf(stderr, "Framedropping is %s\n", framedropping ? "enabled" : "disabled");
-  if (framedropping) {
-    GstElement *ident_framedrop = gst_bin_get_by_name(GST_BIN(gst_pipeline), "framedrop");
-    if (GST_IS_ELEMENT(ident_framedrop)) {
-      g_object_set(G_OBJECT(ident_framedrop), "signal-handoffs", TRUE, NULL);
-      g_signal_connect(ident_framedrop, "handoff", G_CALLBACK(cb_framedrop), NULL);
-    } else {
-      fprintf(stderr, "Failed to get a framedrop element from the pipeline, no framedropping\n");
-    }
-  }
-
-
   // Optional sound delay via an identity element
   fprintf(stderr, "Sound delay: %d ms\n", sound_delay);
-  GstElement *ident_delay = gst_bin_get_by_name(GST_BIN(gst_pipeline), "delay");
-  if (GST_IS_ELEMENT(ident_delay)) {
-    g_object_set(G_OBJECT(ident_delay), "signal-handoffs", TRUE, NULL);
-    g_signal_connect(ident_delay, "handoff", G_CALLBACK(cb_delay), NULL);
+  GstElement *identity_elem = gst_bin_get_by_name(GST_BIN(gst_pipeline), "delay");
+  if (GST_IS_ELEMENT(identity_elem)) {
+    g_object_set(G_OBJECT(identity_elem), "signal-handoffs", TRUE, NULL);
+    g_signal_connect(identity_elem, "handoff", G_CALLBACK(cb_delay), NULL);
   } else {
     fprintf(stderr, "Failed to get a delay element from the pipeline, not applying a delay\n");
   }

@@ -3,7 +3,6 @@ video/x-raw,format=YUY2 !
 textoverlay text='' valignment=top halignment=right font-desc="Sans, 10" name=overlay ! 
 nvvidconv interpolation-method=5 ! video/x-raw(memory:NVMM),width=1280,height=720 ! 
 nvvidconv ! 
-identity name=framedrop signal-handoffs=TRUE ! identity drop-buffer-flags=GST_BUFFER_FLAG_DROPPABLE ! 
 x264enc speed-preset=2 key-int-max=60 name=venc_kbps ! 
 h264parse config-interval=-1 ! queue ! mux. 
 alsasrc device=hw:2 ! identity name=delay signal-handoffs=TRUE ! volume volume=1.0 ! 
