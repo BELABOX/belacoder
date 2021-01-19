@@ -37,13 +37,13 @@
 #define BS_INCR_MIN         12 // maximum buffer size to increase the bitrate when the current bitrate is low
 #define BS4M_INCR           30 // maximum buffer size at 4Mbps to increase the bitrate
 #define BS_DECR_MIN        100 // base value for the scaled BS_DECR (buffer size threshold for reducing the bitrate)
-#define BS4M_DECR           50 // value to add to BS_DECR for 4Mbps (scaled proportionally to the current bitrate)
-#define BS_DECR_FAST       500 // min buffer size to reduce the bitrate even when the buffer size is already decreasing
+#define BS4M_DECR           40 // value to add to BS_DECR for 4Mbps (scaled proportionally to the current bitrate)
+#define BS_DECR_FAST       400 // min buffer size to reduce the bitrate even when the buffer size is already decreasing
 #define BITRATE_INCR_STEP  (100*1000) // the bitrate increment step (bps)
-#define BITRATE_INCR_INT   750        // the minimum interval for increasing the bitrate (ms)
+#define BITRATE_INCR_INT   350        // the minimum interval for increasing the bitrate (ms)
 #define BITRATE_DECR_SCALE  10        // the bitrate is decreased by cur_bitrate/BITRATE_DECR_SCALE
 #define BITRATE_DECR_MIN   (100*1000) // the minimum value to decrease the bitrate by (bps)
-#define BITRATE_DECR_INT   500        // the minimum interval for decreasing the bitrate (ms)
+#define BITRATE_DECR_INT   200        // the minimum interval for decreasing the bitrate (ms)
 
 // settings ranges
 #define MAX_SOUND_DELAY 10000
