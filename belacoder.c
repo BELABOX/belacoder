@@ -35,7 +35,7 @@
 #define DEF_BITRATE (6 * 1000 * 1000)
 #define BITRATE_UPDATE_INT  20 // buffer size sampling interval (ms)
 #define BS_INCR_MIN         12 // maximum buffer size to increase the bitrate when the current bitrate is low
-#define BS4M_INCR           40 // maximum buffer size at 4Mbps to increase the bitrate
+#define BS4M_INCR           30 // maximum buffer size at 4Mbps to increase the bitrate
 #define BS_DECR_MIN        100 // base value for the scaled BS_DECR (buffer size threshold for reducing the bitrate)
 #define BS4M_DECR           50 // value to add to BS_DECR for 4Mbps (scaled proportionally to the current bitrate)
 #define BS_DECR_FAST       500 // min buffer size to reduce the bitrate even when the buffer size is already decreasing
@@ -152,15 +152,15 @@ void update_bitrate() {
   avg_bs = avg_bs*0.90 + ((double)bs) * 0.10;
 
   // Scale the buffer size thresholds depending on the current bitrate
-  double scaled_incr_bs = max(BS_INCR_MIN, BS4M_INCR * (double)cur_bitrate/(4*1000*1000));
+  int scaled_bs_incr = BS_INCR_MIN + (int)(BS4M_INCR * (double)cur_bitrate/(4*1000*1000));
   int scaled_bs_decr = BS_DECR_MIN + (int)(BS4M_DECR * (double)cur_bitrate/(4*1000*1000));
 
   int bitrate = cur_bitrate;
 
-  debug("bs: %d max_bs: %d avg_bs: %f, scaled_target: %f, bitrate %d\n",
-        bs, max_bs, avg_bs, scaled_incr_bs, cur_bitrate);
+  debug("bs: %d max_bs: %d avg_bs: %f, scaled_incr: %d, scaled_decr: %d, bitrate %d\n",
+        bs, max_bs, avg_bs, scaled_bs_incr, scaled_bs_decr, cur_bitrate);
 
-  if (max_bs < scaled_incr_bs && ctime > next_bitrate_adj) {
+  if (max_bs < scaled_bs_incr && ctime > next_bitrate_adj) {
     bitrate += BITRATE_INCR_STEP;
     next_bitrate_adj = ctime + BITRATE_INCR_INT;
   } else if (bs > scaled_bs_decr && ctime > next_bitrate_adj && (avg_bs > prev_bs || bs > BS_DECR_FAST)) {
