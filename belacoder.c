@@ -324,7 +324,7 @@ void cb_pipeline (GstBus *bus, GstMessage *message, gpointer user_data) {
 #define FIXED_ARGS 3
 int main(int argc, char** argv) {
   int opt;
-  while ((opt = getopt(argc, argv, "d:b:f")) != -1) {
+  while ((opt = getopt(argc, argv, "d:b:")) != -1) {
     switch (opt) {
       case 'b':
         bitrate_filename = optarg;
@@ -341,7 +341,7 @@ int main(int argc, char** argv) {
     }
   }
 
-  if (argc - optind < FIXED_ARGS) {
+  if (argc - optind != FIXED_ARGS) {
     exit_syntax();
   }
 
