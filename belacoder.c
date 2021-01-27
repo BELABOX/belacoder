@@ -248,7 +248,7 @@ int parse_ip_port(struct sockaddr_in *addr, char *ip_str, char *port_str) {
   return 0;
 }
 
-int init_srt(char *host, char *port) {
+int init_srt(char *host, char *port, char *stream_id) {
   struct addrinfo hints;
   struct addrinfo *addrs;
   memset(&hints, 0, sizeof(hints));
@@ -272,6 +272,11 @@ int init_srt(char *host, char *port) {
   ret = srt_setsockflag(sock, SRTO_OHEADBW, &ohead, sizeof(ohead));
   assert(ret == 0);
 #endif
+
+  if (stream_id != NULL) {
+    ret = srt_setsockflag(sock, SRTO_STREAMID, stream_id, strlen(stream_id));
+    assert(ret == 0);
+  }
 
   int connected = -3;
   for (struct addrinfo *addr = addrs; addr != NULL; addr = addr->ai_next) {
@@ -324,7 +329,9 @@ void cb_pipeline (GstBus *bus, GstMessage *message, gpointer user_data) {
 #define FIXED_ARGS 3
 int main(int argc, char** argv) {
   int opt;
-  while ((opt = getopt(argc, argv, "d:b:")) != -1) {
+  char *stream_id = NULL;
+
+  while ((opt = getopt(argc, argv, "d:b:s:")) != -1) {
     switch (opt) {
       case 'b':
         bitrate_filename = optarg;
@@ -335,6 +342,9 @@ int main(int argc, char** argv) {
           fprintf(stderr, "Maximum sound delay +/- %d\n\n", MAX_SOUND_DELAY);
           exit_syntax();
         }
+        break;
+      case 's':
+        stream_id = optarg;
         break;
       default:
         exit_syntax();
@@ -375,7 +385,7 @@ int main(int argc, char** argv) {
   GstElement *rtlasink = gst_bin_get_by_name(GST_BIN(gst_pipeline), "appsink");
   if (GST_IS_ELEMENT(rtlasink)) {
     gst_app_sink_set_callbacks (GST_APP_SINK(rtlasink), &callbacks, NULL, NULL);
-    int ret = init_srt(argv[optind+1], argv[optind+2]);
+    int ret = init_srt(argv[optind+1], argv[optind+2], stream_id);
     assert(ret == 0);
   }
 
