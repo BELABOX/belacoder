@@ -303,7 +303,7 @@ void exit_syntax() {
   fprintf(stderr, "Options:\n");
   fprintf(stderr, "  -d <delay>          Audio delay in milliseconds\n");
   fprintf(stderr, "  -s <streamid>       SRT stream ID\n");
-  fprintf(stderr, "  -l <latency>        SRT latency in ms\n");
+  fprintf(stderr, "  -l <latency>        SRT latency in milliseconds\n");
   fprintf(stderr, "  -b <bitrate file>   Bitrate settings file, see below\n\n");
   fprintf(stderr, "Bitrate settings file syntax:\n");
   fprintf(stderr, "MIN BITRATE (bps)\n");
