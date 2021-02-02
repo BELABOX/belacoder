@@ -45,7 +45,11 @@
 #define BITRATE_DECR_MIN   (100*1000) // the minimum value to decrease the bitrate by (bps)
 #define BITRATE_DECR_INT   500        // the minimum interval for decreasing the bitrate (ms)
 
+// settings ranges
 #define MAX_SOUND_DELAY 10000
+#define MIN_SRT_LATENCY 100
+#define MAX_SRT_LATENCY 10000
+#define DEF_SRT_LATENCY 2000
 
 #define min(a, b) ((a < b) ? a : b)
 #define max(a, b) ((a > b) ? a : b)
@@ -248,7 +252,7 @@ int parse_ip_port(struct sockaddr_in *addr, char *ip_str, char *port_str) {
   return 0;
 }
 
-int init_srt(char *host, char *port, char *stream_id) {
+int init_srt(char *host, char *port, int srt_latency, char *stream_id) {
   struct addrinfo hints;
   struct addrinfo *addrs;
   memset(&hints, 0, sizeof(hints));
@@ -273,6 +277,9 @@ int init_srt(char *host, char *port, char *stream_id) {
   assert(ret == 0);
 #endif
 
+  ret = srt_setsockflag(sock, SRTO_LATENCY, &srt_latency, sizeof(srt_latency));
+  assert(ret == 0);
+
   if (stream_id != NULL) {
     ret = srt_setsockflag(sock, SRTO_STREAMID, stream_id, strlen(stream_id));
     assert(ret == 0);
@@ -296,6 +303,7 @@ void exit_syntax() {
   fprintf(stderr, "Options:\n");
   fprintf(stderr, "  -d <delay>          Audio delay in milliseconds\n");
   fprintf(stderr, "  -s <streamid>       SRT stream ID\n");
+  fprintf(stderr, "  -l <latency>        SRT latency in ms\n");
   fprintf(stderr, "  -b <bitrate file>   Bitrate settings file, see below\n\n");
   fprintf(stderr, "Bitrate settings file syntax:\n");
   fprintf(stderr, "MIN BITRATE (bps)\n");
@@ -331,8 +339,9 @@ void cb_pipeline (GstBus *bus, GstMessage *message, gpointer user_data) {
 int main(int argc, char** argv) {
   int opt;
   char *stream_id = NULL;
+  int srt_latency = DEF_SRT_LATENCY;
 
-  while ((opt = getopt(argc, argv, "d:b:s:")) != -1) {
+  while ((opt = getopt(argc, argv, "d:b:s:l:")) != -1) {
     switch (opt) {
       case 'b':
         bitrate_filename = optarg;
@@ -346,6 +355,14 @@ int main(int argc, char** argv) {
         break;
       case 's':
         stream_id = optarg;
+        break;
+      case 'l':
+        srt_latency = strtol(optarg, NULL, 10);
+        if (srt_latency < MIN_SRT_LATENCY || srt_latency > MAX_SRT_LATENCY) {
+          fprintf(stderr, "The SRT latency must be between %d and %d ms\n\n",
+                  MIN_SRT_LATENCY, MAX_SRT_LATENCY);
+          exit_syntax();
+        }
         break;
       default:
         exit_syntax();
@@ -386,10 +403,14 @@ int main(int argc, char** argv) {
   GstElement *rtlasink = gst_bin_get_by_name(GST_BIN(gst_pipeline), "appsink");
   if (GST_IS_ELEMENT(rtlasink)) {
     gst_app_sink_set_callbacks (GST_APP_SINK(rtlasink), &callbacks, NULL, NULL);
-    int ret = init_srt(argv[optind+1], argv[optind+2], stream_id);
+    int ret = init_srt(argv[optind+1], argv[optind+2], srt_latency, stream_id);
     assert(ret == 0);
-  }
 
+    len = sizeof(srt_latency);
+    ret = srt_getsockflag(sock, SRTO_PEERLATENCY, &srt_latency, &len);
+    assert(ret == 0);
+    fprintf(stderr, "Negotiated SRT latency: %d ms\n", srt_latency);
+  }
 
   // Optional dynamic video bitrate
   if (bitrate_filename) {
