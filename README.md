@@ -66,8 +66,10 @@ The gstreamer pipelines are available in the `pipeline` directory, organised in 
 
 * `CODEC` is `h265` or `h264` (for system-specific hw encoders), or `x264_superfast` / `x264_veryfast` for x264 software encoding
 * `CAPTUREDEV` is either `camlink` for Elgato Cam Link 4K ([Amazon.com](https://amzn.to/2Hx3tFM) / [Amazon.co.uk](https://amzn.to/3jp32us)) or other uncompressed YUY2 capture cards or `v4l_mjpeg` for low cost USB2.0 MJPEG capture cards ([Amazon.com](https://amzn.to/31VOTyS) / [Amazon.co.uk](https://amzn.to/3mwlNxU))
-* `RES` can be blank - capturing at the highest available resolution, `720p` or `1080p`
+* `RES` can be blank - capturing at the highest available resolution, `720p`, `1080p`, `1440p`, or `4k_2160p`
 * `FPS` can be blank - capturing at the highest available refresh rate, `29.97`, or `30` FPS
+
+Note that to encode 4k / 2160p video captured by a camlink you must specifically use `h265_camlink_4k_2160p` rather than `h265_camlink`, as the `preset-level` quality setting of the encoder must be set to a lower value to allow the encoder to maintain 30 FPS in all conditions.
 
 Please check the supplied pipelines for examples. Here are a few unorganised tips & pointers:
 
