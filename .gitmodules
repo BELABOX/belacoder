@@ -1,0 +1,3 @@
+[submodule "camlink_workaround"]
+	path = camlink_workaround
+	url = https://github.com/BELABOX/camlink.git
