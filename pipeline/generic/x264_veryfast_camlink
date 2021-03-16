@@ -1,5 +1,4 @@
 v4l2src ! 
-video/x-raw,format=YUY2 ! 
 textoverlay text='' valignment=top halignment=right font-desc="Sans, 10" name=overlay ! 
 videoconvert ! 
 x264enc speed-preset=3 key-int-max=60 name=venc_kbps ! 

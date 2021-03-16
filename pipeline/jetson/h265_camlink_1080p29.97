@@ -1,5 +1,4 @@
 v4l2src ! 
-video/x-raw,format=YUY2 ! 
 videorate ! video/x-raw,framerate=7013/234 ! 
 textoverlay text='' valignment=top halignment=right font-desc="Sans, 10" name=overlay ! 
 nvvidconv interpolation-method=5 ! video/x-raw(memory:NVMM),width=1920,height=1080 ! 
