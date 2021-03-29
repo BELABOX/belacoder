@@ -329,6 +329,10 @@ int init_srt(char *host, char *port, char *stream_id) {
     assert(ret == 0);
   }
 
+  int32_t algo = 1;
+  ret = srt_setsockflag(sock, SRTO_RETRANSMITALGO, &algo, sizeof(algo));
+  assert(ret == 0);
+
   int connected = -3;
   for (struct addrinfo *addr = addrs; addr != NULL; addr = addr->ai_next) {
     ret = srt_connect(sock, addr->ai_addr, addr->ai_addrlen);
