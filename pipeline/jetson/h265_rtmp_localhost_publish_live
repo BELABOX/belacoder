@@ -8,7 +8,7 @@ nvv4l2h265enc control-rate=1 qp-range="28,50:0,38:0,50" iframeinterval=60 preset
 h265parse config-interval=-1 ! queue ! mux. 
 
 demux.audio ! aacparse ! avdec_aac ! identity name=delay signal-handoffs=TRUE ! volume volume=1.0 ! 
-audioconvert ! avenc_aac bitrate=131072 ! aacparse ! queue ! mux. 
+audioconvert ! avenc_aac bitrate=131072 ! aacparse ! queue max-size-time=10000000000 max-size-buffers=1000 ! mux. 
 
 mpegtsmux name=mux ! 
 appsink name=appsink

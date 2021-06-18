@@ -6,6 +6,6 @@ nvvidconv !
 x264enc speed-preset=2 key-int-max=60 name=venc_kbps ! 
 h264parse config-interval=-1 ! queue ! mux. 
 alsasrc device=hw:2 ! identity name=delay signal-handoffs=TRUE ! volume volume=1.0 ! 
-audioconvert ! avenc_aac bitrate=131072 ! aacparse ! queue ! mux. 
+audioconvert ! avenc_aac bitrate=131072 ! aacparse ! queue max-size-time=10000000000 max-size-buffers=1000 ! mux. 
 mpegtsmux name=mux ! 
 appsink name=appsink
