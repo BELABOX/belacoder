@@ -45,7 +45,7 @@
                                           // BITRATE_DECR_MIN + cur_bitrate/BITRATE_DECR_SCALE
 
 // settings ranges
-#define MAX_SOUND_DELAY 10000
+#define MAX_AV_DELAY 10000
 #define MIN_SRT_LATENCY 100
 #define MAX_SRT_LATENCY 10000
 #define DEF_SRT_LATENCY 2000
@@ -68,7 +68,7 @@ SRTSOCKET sock;
 
 int enc_bitrate_div = 1;
 
-int sound_delay = 0;
+int av_delay = 0;
 
 int min_bitrate = MIN_BITRATE;
 int max_bitrate = DEF_BITRATE;
@@ -349,7 +349,7 @@ int init_srt(char *host, char *port, char *stream_id) {
 void exit_syntax() {
   fprintf(stderr, "Syntax: belacoder PIPELINE_FILE ADDR PORT [options]\n\n");
   fprintf(stderr, "Options:\n");
-  fprintf(stderr, "  -d <delay>          Audio delay in milliseconds\n");
+  fprintf(stderr, "  -d <delay>          Audio-video delay in milliseconds\n");
   fprintf(stderr, "  -s <streamid>       SRT stream ID\n");
   fprintf(stderr, "  -l <latency>        SRT latency in milliseconds\n");
   fprintf(stderr, "  -b <bitrate file>   Bitrate settings file, see below\n\n");
@@ -365,7 +365,7 @@ void exit_syntax() {
 
 static void cb_delay (GstElement *identity, GstBuffer *buffer, gpointer data) {
   buffer = gst_buffer_make_writable(buffer);
-  GST_BUFFER_PTS (buffer) += GST_SECOND * sound_delay / 1000;
+  GST_BUFFER_PTS (buffer) += GST_SECOND * abs(av_delay) / 1000;
 }
 
 void cb_pipeline (GstBus *bus, GstMessage *message, gpointer user_data) {
@@ -395,9 +395,9 @@ int main(int argc, char** argv) {
         bitrate_filename = optarg;
         break;
       case 'd':
-        sound_delay = strtol(optarg, NULL, 10);
-        if (sound_delay < -MAX_SOUND_DELAY || sound_delay > MAX_SOUND_DELAY) {
-          fprintf(stderr, "Maximum sound delay +/- %d\n\n", MAX_SOUND_DELAY);
+        av_delay = strtol(optarg, NULL, 10);
+        if (av_delay < -MAX_AV_DELAY || av_delay > MAX_AV_DELAY) {
+          fprintf(stderr, "Maximum sound delay +/- %d\n\n", MAX_AV_DELAY);
           exit_syntax();
         }
         break;
@@ -496,8 +496,8 @@ int main(int argc, char** argv) {
 
 
   // Optional sound delay via an identity element
-  fprintf(stderr, "Sound delay: %d ms\n", sound_delay);
-  GstElement *identity_elem = gst_bin_get_by_name(GST_BIN(gst_pipeline), "delay");
+  fprintf(stderr, "A-V delay: %d ms\n", av_delay);
+  GstElement *identity_elem = gst_bin_get_by_name(GST_BIN(gst_pipeline), av_delay >= 0 ? "a_delay" : "v_delay");
   if (GST_IS_ELEMENT(identity_elem)) {
     g_object_set(G_OBJECT(identity_elem), "signal-handoffs", TRUE, NULL);
     g_signal_connect(identity_elem, "handoff", G_CALLBACK(cb_delay), NULL);

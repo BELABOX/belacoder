@@ -35,7 +35,9 @@ Usage
     Syntax: belacoder PIPELINE_FILE ADDR PORT [options]
 
     Options:
-      -d <delay>          Audio delay in milliseconds
+      -d <delay>          Audio-video delay in milliseconds
+      -s <streamid>       SRT stream ID
+      -l <latency>        SRT latency in milliseconds
       -b <bitrate file>   Bitrate settings file, see below
 
     Bitrate settings file syntax:
@@ -75,5 +77,5 @@ Please check the supplied pipelines for examples. Here are a few unorganised tip
 
 * belacoder will work with arbitrary gstreamer pipelines as long as they're valid, however for dynamic bitrate control the video encoder **must** have `name=venc_bps` or `name=venc_kbps` and it must have a `bitrate` property changeable in the running state; the sink **must** be `appsink name=appsink`, which will stream to the SRT IP and port specified as command line arguments
 * If a `textoverlay` element with `name=overlay` is specificed, then it will be dynamically updated to show the current bitrate
-* An `identity name=delay signal-handoffs=TRUE` element can be used to adjust the PTS (presentation timestamp) of a stream by `DELAY` milliseconds. Use it to synchronise the audio and video if needed (e.g. DELAY of around 900 for a Gopro Hero7 with stabilisation enabled)
+* `identity name=a_delay signal-handoffs=TRUE` and `identity name=v_delay signal-handoffs=TRUE` elements can be used to adjust the PTS (presentation timestamp) of the audio and video streams respectively by `DELAY` milliseconds. Use them to synchronise the audio and video if needed (e.g. audio delay of around 900 for a Gopro Hero7 with stabilisation enabled)
 * The Jetson Nano hardware encoders seem biased towards allocating most of the bitrate budget to I-frames, while heavily compressing P-frames, especially on lower bitrates. This can heavily affect image quality when most of the image is moving and this is why we limit the quantization range in our pipelines using `qp-range`. This range makes a big improvement over the defaults, however in some cases results can probably be further improved with different parameters.
