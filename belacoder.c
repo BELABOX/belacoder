@@ -204,17 +204,17 @@ void update_bitrate() {
   if (ctime > next_bitrate_adj) {
     int bitrate = cur_bitrate;
 
-    if (rtt < (int)(rtt_min + rtt_jitter*2) && rtt_avg_delta < 0.0) {
-      bitrate += BITRATE_INCR_STEP;
-      next_bitrate_adj = ctime + BITRATE_INCR_INT;
-
-    } else if (rtt > (srt_latency / 5) || bs > (bs_avg + max(bs_jitter*3.0, bs_avg))) {
+    if (rtt > (srt_latency / 5) || bs > (bs_avg + max(bs_jitter*3.0, bs_avg))) {
       bitrate -= BITRATE_DECR_MIN + bitrate/BITRATE_DECR_SCALE;
       next_bitrate_adj = ctime + BITRATE_DECR_FAST_INT;
 
     } else if (rtt > (int)(rtt_avg + max(rtt_jitter*5, rtt_avg*10/100))) {
       bitrate -= BITRATE_DECR_MIN;
       next_bitrate_adj = ctime + BITRATE_DECR_INT;
+
+    } else if (rtt < (int)(rtt_min + rtt_jitter*2) && rtt_avg_delta < 0.0) {
+      bitrate += BITRATE_INCR_STEP;
+      next_bitrate_adj = ctime + BITRATE_INCR_INT;
     }
 
     bitrate = min_max(bitrate, min_bitrate, max_bitrate);
