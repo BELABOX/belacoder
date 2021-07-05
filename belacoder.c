@@ -213,7 +213,7 @@ void update_bitrate() {
       next_bitrate_adj = ctime + BITRATE_DECR_INT;
 
     } else if (rtt < (int)(rtt_min + rtt_jitter*2) && rtt_avg_delta < 0.0) {
-      bitrate += BITRATE_INCR_STEP;
+      bitrate += min(bitrate / 20, BITRATE_INCR_STEP);
       next_bitrate_adj = ctime + BITRATE_INCR_INT;
     }
 
