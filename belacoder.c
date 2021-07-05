@@ -30,7 +30,7 @@
 
 #define SRT_MAX_OHEAD 20 // maximum SRT transmission overhead (when using appsink)
 
-#define MIN_BITRATE (500 * 1000)
+#define MIN_BITRATE (300 * 1000)
 #define ABS_MAX_BITRATE (30 * 1000 * 1000)
 #define DEF_BITRATE (6 * 1000 * 1000)
 
