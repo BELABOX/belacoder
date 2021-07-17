@@ -201,36 +201,40 @@ int update_bitrate() {
         bs, bs_avg, bs_jitter, cur_bitrate, rtt, delta_rtt, rtt_avg_delta, rtt_avg, rtt_jitter, rtt_min);
 
 
-  static uint64_t next_bitrate_adj = 0;
-  if (ctime > next_bitrate_adj) {
-    int bitrate = cur_bitrate;
+  static uint64_t next_bitrate_incr = 0;
+  static uint64_t next_bitrate_decr = 0;
 
-    if (rtt > (srt_latency / 5) || bs > (bs_avg + max(bs_jitter*3.0, bs_avg))) {
-      bitrate -= BITRATE_DECR_MIN + bitrate/BITRATE_DECR_SCALE;
-      next_bitrate_adj = ctime + BITRATE_DECR_FAST_INT;
+  int bitrate = cur_bitrate;
 
-    } else if (rtt > (int)(rtt_avg + max(rtt_jitter*5, rtt_avg*10/100))) {
-      bitrate -= BITRATE_DECR_MIN;
-      next_bitrate_adj = ctime + BITRATE_DECR_INT;
+  if (ctime > next_bitrate_decr &&
+      (rtt > (srt_latency / 5) || bs > (bs_avg + max(bs_jitter*3.0, bs_avg)))) {
+    bitrate -= BITRATE_DECR_MIN + bitrate/BITRATE_DECR_SCALE;
+    next_bitrate_decr = ctime + BITRATE_DECR_FAST_INT;
 
-    } else if (rtt < (int)(rtt_min + rtt_jitter*2) && rtt_avg_delta < 0.0) {
-      bitrate += min(bitrate / 20, BITRATE_INCR_STEP);
-      next_bitrate_adj = ctime + BITRATE_INCR_INT;
-    }
+  } else if (ctime > next_bitrate_decr &&
+             (rtt > (int)(rtt_avg + max(rtt_jitter*5, rtt_avg*10/100))
+             || bs > (int)(bs_avg + bs_jitter))) {
+    bitrate -= BITRATE_DECR_MIN;
+    next_bitrate_decr = ctime + BITRATE_DECR_INT;
 
-    bitrate = min_max(bitrate, min_bitrate, max_bitrate);
+  } else if (rtt < (int)(rtt_min + rtt_jitter*2) &&
+             rtt_avg_delta < 0.0 && ctime > next_bitrate_incr) {
+    bitrate += min(bitrate / 20, BITRATE_INCR_STEP);
+    next_bitrate_incr = ctime + BITRATE_INCR_INT;
+  }
 
-    if (bitrate != cur_bitrate) {
-      cur_bitrate = bitrate;
+  bitrate = min_max(bitrate, min_bitrate, max_bitrate);
 
-      // round the bitrate we set to 100 kbps
-      bitrate = bitrate / (100 * 1000) * (100 * 1000);
-      g_object_set (G_OBJECT(encoder), "bitrate", bitrate / enc_bitrate_div, NULL);
+  if (bitrate != cur_bitrate) {
+    cur_bitrate = bitrate;
 
-      update_overlay(bitrate);
+    // round the bitrate we set to 100 kbps
+    bitrate = bitrate / (100 * 1000) * (100 * 1000);
+    g_object_set (G_OBJECT(encoder), "bitrate", bitrate / enc_bitrate_div, NULL);
 
-      debug("set bitrate to %d, internal value %d\n", bitrate, cur_bitrate);
-    }
+    update_overlay(bitrate);
+
+    debug("set bitrate to %d, internal value %d\n", bitrate, cur_bitrate);
   }
 
   return 0;
