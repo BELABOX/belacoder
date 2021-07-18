@@ -35,8 +35,10 @@
 #define DEF_BITRATE (6 * 1000 * 1000)
 
 #define BITRATE_UPDATE_INT 20
-#define BITRATE_INCR_STEP      (100*1000) // the bitrate increment step (bps)
-#define BITRATE_INCR_INT       300        // the minimum interval for increasing the bitrate (ms)
+#define BITRATE_INCR_MIN       (30*1000)  // the minimum bitrate increment step (bps)
+#define BITRATE_INCR_INT       500        // the minimum interval for increasing the bitrate (ms)
+#define BITRATE_INCR_SCALE     30         // the bitrate is increased by
+                                          // BITRATE_INCR_MIN + cur_bitrate/BITRATE_INCR_SCALE
 
 #define BITRATE_DECR_MIN       (100*1000) // the minimum value to decrease the bitrate by (bps)
 #define BITRATE_DECR_INT       200        // (light congestion) min interval for decreasing the bitrate (ms)
@@ -219,7 +221,7 @@ int update_bitrate() {
 
   } else if (rtt < (int)(rtt_min + rtt_jitter*2) &&
              rtt_avg_delta < 0.0 && ctime > next_bitrate_incr) {
-    bitrate += min(bitrate / 20, BITRATE_INCR_STEP);
+    bitrate += BITRATE_INCR_MIN + bitrate / BITRATE_INCR_SCALE;
     next_bitrate_incr = ctime + BITRATE_INCR_INT;
   }
 
