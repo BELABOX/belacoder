@@ -125,12 +125,12 @@ ret_err:
   return -2;
 }
 
-void update_bitrate() {
+int update_bitrate() {
   static uint64_t next_bitrate_check = 0;
 
   uint64_t ctime = getms();
   if (ctime < next_bitrate_check) {
-    return;
+    return 0;
   }
   next_bitrate_check = ctime + BITRATE_UPDATE_INT;
 
@@ -141,7 +141,7 @@ void update_bitrate() {
   int bs = -1;
   int sz = sizeof(bs);
   int ret = srt_getsockflag(sock, SRTO_SNDDATA, &bs, &sz);
-  assert(ret == 0 && bs >= 0);
+  if (ret != 0 || bs < 0) return -1;
 
   // Rolling average
   static double bs_avg = 0;
@@ -163,7 +163,7 @@ void update_bitrate() {
    */
   SRT_TRACEBSTATS stats;
   ret = srt_bstats(sock, &stats, 1);
-  assert(ret == 0);
+  if (ret != 0) return -1;
   int rtt = (int)stats.msRTT;
 
   // Update the average RTT
@@ -231,6 +231,8 @@ void update_bitrate() {
       debug("set bitrate to %d, internal value %d\n", bitrate, cur_bitrate);
     }
   }
+
+  return 0;
 }
 
 #define SRT_PKT_SIZE 1316
@@ -244,7 +246,7 @@ GstFlowReturn new_buf_cb(GstAppSink *sink, gpointer user_data) {
 
   // We can only update the bitrate when we have an appsink and a configurable video_enc
   if (GST_IS_ELEMENT(encoder)) {
-    update_bitrate();
+    if (update_bitrate() != 0) goto error;
   }
 
   GstBuffer *buffer = NULL;
@@ -262,7 +264,7 @@ GstFlowReturn new_buf_cb(GstAppSink *sink, gpointer user_data) {
 
     if (pkt_len == SRT_PKT_SIZE) {
       int nb = srt_send(sock, pkt, SRT_PKT_SIZE);
-      assert(nb == SRT_PKT_SIZE);
+      if (nb != SRT_PKT_SIZE) goto error;
       pkt_len = 0;
     }
 
@@ -273,6 +275,9 @@ GstFlowReturn new_buf_cb(GstAppSink *sink, gpointer user_data) {
   gst_sample_unref (sample);
 
   return GST_FLOW_OK;
+
+error:
+  return GST_FLOW_ERROR;
 }
 
 int parse_ip(struct sockaddr_in *addr, char *ip_str) {
