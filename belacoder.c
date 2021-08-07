@@ -296,7 +296,7 @@ int parse_ip_port(struct sockaddr_in *addr, char *ip_str, char *port_str) {
   return 0;
 }
 
-int init_srt(char *host, char *port, char *stream_id) {
+int connect_srt(char *host, char *port, char *stream_id) {
   struct addrinfo hints;
   struct addrinfo *addrs;
   memset(&hints, 0, sizeof(hints));
@@ -305,7 +305,6 @@ int init_srt(char *host, char *port, char *stream_id) {
   int ret = getaddrinfo(host, port, &hints, &addrs);
   if (ret != 0) return -1;
 
-  srt_startup();
   sock = srt_create_socket();
   if (sock == SRT_INVALID_SOCK) return -2;
 
@@ -338,7 +337,13 @@ int init_srt(char *host, char *port, char *stream_id) {
     ret = srt_connect(sock, addr->ai_addr, addr->ai_addrlen);
     if (ret == 0) {
       connected = 0;
-      continue;
+
+      int len = sizeof(srt_latency);
+      ret = srt_getsockflag(sock, SRTO_PEERLATENCY, &srt_latency, &len);
+      assert(ret == 0);
+      fprintf(stderr, "SRT connected to %s:%s. Negotiated latency: %d ms\n",
+              host, port, srt_latency);
+      break;
     }
   }
   freeaddrinfo(addrs);
@@ -386,6 +391,8 @@ void cb_pipeline (GstBus *bus, GstMessage *message, gpointer user_data) {
 #define FIXED_ARGS 3
 int main(int argc, char** argv) {
   int opt;
+  char *srt_host = NULL;
+  char *srt_port = NULL;
   char *stream_id = NULL;
   srt_latency = DEF_SRT_LATENCY;
 
@@ -446,20 +453,6 @@ int main(int argc, char** argv) {
   g_signal_connect(bus, "message", (GCallback)cb_pipeline, gst_pipeline);
 
 
-  // Optional SRT streaming via an appsink (needed for dynamic video bitrate)
-  GstAppSinkCallbacks callbacks = {NULL, NULL, new_buf_cb};
-  GstElement *rtlasink = gst_bin_get_by_name(GST_BIN(gst_pipeline), "appsink");
-  if (GST_IS_ELEMENT(rtlasink)) {
-    gst_app_sink_set_callbacks (GST_APP_SINK(rtlasink), &callbacks, NULL, NULL);
-    int ret = init_srt(argv[optind+1], argv[optind+2], stream_id);
-    assert(ret == 0);
-
-    len = sizeof(srt_latency);
-    ret = srt_getsockflag(sock, SRTO_PEERLATENCY, &srt_latency, &len);
-    assert(ret == 0);
-    fprintf(stderr, "Negotiated SRT latency: %d ms\n", srt_latency);
-  }
-
   // Optional dynamic video bitrate
   if (bitrate_filename) {
     int ret;
@@ -505,15 +498,50 @@ int main(int argc, char** argv) {
     fprintf(stderr, "Failed to get a delay element from the pipeline, not applying a delay\n");
   }
 
+  // Optional SRT streaming via an appsink (needed for dynamic video bitrate)
+  GstAppSinkCallbacks callbacks = {NULL, NULL, new_buf_cb};
+  GstElement *srt_app_sink = gst_bin_get_by_name(GST_BIN(gst_pipeline), "appsink");
+  if (GST_IS_ELEMENT(srt_app_sink)) {
+    gst_app_sink_set_callbacks (GST_APP_SINK(srt_app_sink), &callbacks, NULL, NULL);
+    srt_host = argv[optind+1];
+    srt_port = argv[optind+2];
+
+    srt_startup();
+  }
 
   loop = g_main_loop_new (NULL, FALSE);
-  /* If the gstreamer pipeline encounters an error, attempt to restart it
-     This could happen for example if the capture card is momentary unplugged */
+
+  /*
+    If the gstreamer pipeline encounters an error, attempt to restart it
+    This could happen for example if the capture card is momentary unplugged
+
+    We close and reopen the SRT socket because 1) sometimes media players take a
+    while to recover / resync if we restart the stream over the same connection
+    and 2) because if we take too long, the SRT connection will timeout and
+    we'll just get an SRT error as soon the pipeline succesfully restarts.
+
+    1) relies on any SRT relay servers to close the connection to the video
+    player when the ingest connection is closed, and also on the video player to
+    reconnect. This results in reliable, speedy recovery when using OBS and the
+    Belabox Cloud SRT relay service.
+  */
   while(1) {
+    if (GST_IS_ELEMENT(srt_app_sink)) {
+      int ret_srt = connect_srt(srt_host, srt_port, stream_id);
+      if (ret_srt != 0) continue;
+    }
+
     // Everything good so far, start the gstreamer pipeline
     gst_element_set_state((GstElement*)gst_pipeline, GST_STATE_PLAYING);
     g_main_loop_run(loop);
     gst_element_set_state((GstElement*)gst_pipeline, GST_STATE_NULL);
+
+    if (GST_IS_ELEMENT(srt_app_sink)) {
+      srt_close(sock);
+    }
+
+    /* Rate limiting */
+    usleep(1000*1000); // 1s
   }
 
   return 0;
