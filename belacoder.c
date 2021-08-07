@@ -65,6 +65,7 @@ static GstPipeline *gst_pipeline = NULL;
 GMainLoop *loop;
 GstElement *encoder, *overlay;
 SRTSOCKET sock;
+int quit = 0;
 
 int enc_bitrate_div = 1;
 
@@ -393,6 +394,11 @@ void cb_pipeline (GstBus *bus, GstMessage *message, gpointer user_data) {
   }
 }
 
+void cb_sigterm(int signum) {
+  quit = 1;
+  g_main_loop_quit(loop);
+}
+
 #define FIXED_ARGS 3
 int main(int argc, char** argv) {
   int opt;
@@ -515,6 +521,7 @@ int main(int argc, char** argv) {
   }
 
   loop = g_main_loop_new (NULL, FALSE);
+  signal(SIGTERM, cb_sigterm);
 
   /*
     If the gstreamer pipeline encounters an error, attempt to restart it
@@ -543,6 +550,9 @@ int main(int argc, char** argv) {
 
     if (GST_IS_ELEMENT(srt_app_sink)) {
       srt_close(sock);
+    }
+    if (quit) {
+      exit(0);
     }
 
     /* Rate limiting */
