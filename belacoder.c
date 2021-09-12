@@ -87,10 +87,13 @@ uint64_t getms() {
   return time.tv_sec * 1000 + time.tv_nsec / 1000 / 1000;
 }
 
-void update_overlay(int bitrate) {
+void update_overlay(int set_bitrate,
+                    int rtt, int rtt_th_min, int rtt_th_max,
+                    int bs, int bs_th1, int bs_th2) {
   if (GST_IS_ELEMENT(overlay)) {
     char overlay_text[100];
-    snprintf(overlay_text, 100, "bitrate: %d", bitrate/1000);
+    snprintf(overlay_text, 100, "b: %d\nrtt: %d / %d / %d\nbs: %d / %d / %d",
+             set_bitrate/1000, rtt, rtt_th_min, rtt_th_max, bs, bs_th1, bs_th2);
     g_object_set (G_OBJECT(overlay), "text", overlay_text, NULL);
   }
 }
@@ -207,36 +210,40 @@ int update_bitrate() {
   static uint64_t next_bitrate_decr = 0;
 
   int bitrate = cur_bitrate;
+  int bs_th2 = bs_avg + max(bs_jitter*3.0, bs_avg);
+  int bs_th1 = bs_avg + bs_jitter;
+  int rtt_th_max = rtt_avg + max(rtt_jitter*5, rtt_avg*10/100);
+  int rtt_th_min = rtt_min + rtt_jitter*2;
 
   if (ctime > next_bitrate_decr &&
-      (rtt > (srt_latency / 5) || bs > (bs_avg + max(bs_jitter*3.0, bs_avg)))) {
+      (rtt > (srt_latency / 5) || bs > bs_th2)) {
     bitrate -= BITRATE_DECR_MIN + bitrate/BITRATE_DECR_SCALE;
     next_bitrate_decr = ctime + BITRATE_DECR_FAST_INT;
 
   } else if (ctime > next_bitrate_decr &&
-             (rtt > (int)(rtt_avg + max(rtt_jitter*5, rtt_avg*10/100))
-             || bs > (int)(bs_avg + bs_jitter))) {
+             (rtt > rtt_th_max || bs > bs_th1)) {
     bitrate -= BITRATE_DECR_MIN;
     next_bitrate_decr = ctime + BITRATE_DECR_INT;
 
-  } else if (rtt < (int)(rtt_min + rtt_jitter*2) &&
-             rtt_avg_delta < 0.0 && ctime > next_bitrate_incr) {
+  } else if (ctime > next_bitrate_incr &&
+             rtt < rtt_th_min && rtt_avg_delta < 0.0) {
     bitrate += BITRATE_INCR_MIN + bitrate / BITRATE_INCR_SCALE;
     next_bitrate_incr = ctime + BITRATE_INCR_INT;
   }
 
   bitrate = min_max(bitrate, min_bitrate, max_bitrate);
 
+  // round the bitrate we set to 100 kbps
+  int rounded_br = bitrate / (100*1000) * (100*1000);
+
+  update_overlay(rounded_br, rtt, rtt_th_min, rtt_th_max, bs, bs_th1, bs_th2);
+
   if (bitrate != cur_bitrate) {
     cur_bitrate = bitrate;
 
-    // round the bitrate we set to 100 kbps
-    bitrate = bitrate / (100 * 1000) * (100 * 1000);
-    g_object_set (G_OBJECT(encoder), "bitrate", bitrate / enc_bitrate_div, NULL);
+    g_object_set (G_OBJECT(encoder), "bitrate", rounded_br / enc_bitrate_div, NULL);
 
-    update_overlay(bitrate);
-
-    debug("set bitrate to %d, internal value %d\n", bitrate, cur_bitrate);
+    debug("set bitrate to %d, internal value %d\n", rounded_br, cur_bitrate);
   }
 
   return 0;
@@ -572,7 +579,7 @@ int main(int argc, char** argv) {
 
   // Optional bitrate overlay
   overlay = gst_bin_get_by_name(GST_BIN(gst_pipeline), "overlay");
-  update_overlay(cur_bitrate);
+  update_overlay(0,0,0,0,0,0,0);
 
 
   // Optional sound delay via an identity element

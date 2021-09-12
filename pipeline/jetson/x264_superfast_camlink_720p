@@ -1,6 +1,6 @@
 v4l2src ! 
 identity name=v_delay signal-handoffs=TRUE ! 
-textoverlay text='' valignment=top halignment=right font-desc="Sans, 10" name=overlay ! 
+textoverlay text='' valignment=top halignment=right font-desc="Monospace, 6" name=overlay ! 
 nvvidconv interpolation-method=5 ! video/x-raw(memory:NVMM),width=1280,height=720 ! 
 nvvidconv ! 
 x264enc speed-preset=2 key-int-max=60 name=venc_kbps ! 

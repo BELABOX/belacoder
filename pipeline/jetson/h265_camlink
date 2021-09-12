@@ -1,6 +1,6 @@
 v4l2src ! 
 identity name=v_delay signal-handoffs=TRUE ! 
-textoverlay text='' valignment=top halignment=right font-desc="Sans, 10" name=overlay ! 
+textoverlay text='' valignment=top halignment=right font-desc="Monospace, 6" name=overlay ! 
 nvvidconv interpolation-method=5 ! 
 nvv4l2h265enc control-rate=1 qp-range="28,50:0,38:0,50" iframeinterval=60 preset-level=4 maxperf-enable=true EnableTwopassCBR=true insert-sps-pps=true name=venc_bps ! 
 h265parse config-interval=-1 ! queue max-size-time=10000000000 max-size-buffers=1000 max-size-bytes=41943040 ! mux. 
