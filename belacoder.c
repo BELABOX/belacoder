@@ -538,6 +538,9 @@ int main(int argc, char** argv) {
     Belabox Cloud SRT relay service.
   */
   while(1) {
+    if (quit) {
+      exit(0);
+    }
     if (GST_IS_ELEMENT(srt_app_sink)) {
       int ret_srt = connect_srt(srt_host, srt_port, stream_id);
       if (ret_srt != 0) continue;
@@ -550,9 +553,6 @@ int main(int argc, char** argv) {
 
     if (GST_IS_ELEMENT(srt_app_sink)) {
       srt_close(sock);
-    }
-    if (quit) {
-      exit(0);
     }
 
     /* Rate limiting */
