@@ -89,11 +89,11 @@ uint64_t getms() {
 
 void update_overlay(int set_bitrate,
                     int rtt, int rtt_th_min, int rtt_th_max,
-                    int bs, int bs_th1, int bs_th2) {
+                    int bs, int bs_th1, int bs_th2, int bs_th3) {
   if (GST_IS_ELEMENT(overlay)) {
     char overlay_text[100];
-    snprintf(overlay_text, 100, "b: %d\nrtt: %d / %d / %d\nbs: %d / %d / %d",
-             set_bitrate/1000, rtt, rtt_th_min, rtt_th_max, bs, bs_th1, bs_th2);
+    snprintf(overlay_text, 100, "  b: %d\nrtt: %3d/%3d/%3d\n bs: %3d/%3d/%3d/%3d",
+             set_bitrate/1000, rtt, rtt_th_min, rtt_th_max, bs, bs_th1, bs_th2, bs_th3);
     g_object_set (G_OBJECT(overlay), "text", overlay_text, NULL);
   }
 }
@@ -210,12 +210,18 @@ int update_bitrate() {
   static uint64_t next_bitrate_decr = 0;
 
   int bitrate = cur_bitrate;
+  int bs_th3 = (bs_avg + bs_jitter)*3;
   int bs_th2 = bs_avg + max(bs_jitter*3.0, bs_avg);
   int bs_th1 = bs_avg + bs_jitter;
   int rtt_th_max = rtt_avg + max(rtt_jitter*5, rtt_avg*10/100);
   int rtt_th_min = rtt_min + rtt_jitter*2;
 
-  if (ctime > next_bitrate_decr &&
+
+  if (bitrate > min_bitrate && (rtt >= (srt_latency / 3) || bs > bs_th3)) {
+    bitrate = min_bitrate;
+    next_bitrate_decr = ctime + BITRATE_DECR_INT;
+
+  } else if (ctime > next_bitrate_decr &&
       (rtt > (srt_latency / 5) || bs > bs_th2)) {
     bitrate -= BITRATE_DECR_MIN + bitrate/BITRATE_DECR_SCALE;
     next_bitrate_decr = ctime + BITRATE_DECR_FAST_INT;
@@ -236,7 +242,7 @@ int update_bitrate() {
   // round the bitrate we set to 100 kbps
   int rounded_br = bitrate / (100*1000) * (100*1000);
 
-  update_overlay(rounded_br, rtt, rtt_th_min, rtt_th_max, bs, bs_th1, bs_th2);
+  update_overlay(rounded_br, rtt, rtt_th_min, rtt_th_max, bs, bs_th1, bs_th2, bs_th3);
 
   if (bitrate != cur_bitrate) {
     cur_bitrate = bitrate;
@@ -579,7 +585,7 @@ int main(int argc, char** argv) {
 
   // Optional bitrate overlay
   overlay = gst_bin_get_by_name(GST_BIN(gst_pipeline), "overlay");
-  update_overlay(0,0,0,0,0,0,0);
+  update_overlay(0,0,0,0,0,0,0,0);
 
 
   // Optional sound delay via an identity element
