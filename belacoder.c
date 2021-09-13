@@ -210,10 +210,10 @@ int update_bitrate() {
   static uint64_t next_bitrate_decr = 0;
 
   int bitrate = cur_bitrate;
-  int bs_th3 = (bs_avg + bs_jitter)*3;
-  int bs_th2 = bs_avg + max(bs_jitter*3.0, bs_avg);
-  int bs_th1 = bs_avg + bs_jitter;
-  int rtt_th_max = rtt_avg + max(rtt_jitter*5, rtt_avg*10/100);
+  int bs_th3 = (bs_avg + bs_jitter)*4;
+  int bs_th2 = max(50, bs_avg + max(bs_jitter*3.0, bs_avg));
+  int bs_th1 = max(50, bs_avg + bs_jitter*2.5);
+  int rtt_th_max = rtt_avg + max(rtt_jitter*4, rtt_avg*15/100);
   int rtt_th_min = rtt_min + rtt_jitter*2;
 
 
