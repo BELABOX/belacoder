@@ -87,13 +87,13 @@ uint64_t getms() {
   return time.tv_sec * 1000 + time.tv_nsec / 1000 / 1000;
 }
 
-void update_overlay(int set_bitrate,
+void update_overlay(int set_bitrate, double throughput,
                     int rtt, int rtt_th_min, int rtt_th_max,
                     int bs, int bs_th1, int bs_th2, int bs_th3) {
   if (GST_IS_ELEMENT(overlay)) {
     char overlay_text[100];
-    snprintf(overlay_text, 100, "  b: %d\nrtt: %3d/%3d/%3d\n bs: %3d/%3d/%3d/%3d",
-             set_bitrate/1000, rtt, rtt_th_min, rtt_th_max, bs, bs_th1, bs_th2, bs_th3);
+    snprintf(overlay_text, 100, "  b: %4d/%.0f\nrtt: %3d/%3d/%3d\n bs: %3d/%3d/%3d/%3d",
+             set_bitrate/1000, throughput, rtt, rtt_th_min, rtt_th_max, bs, bs_th1, bs_th2, bs_th3);
     g_object_set (G_OBJECT(overlay), "text", overlay_text, NULL);
   }
 }
@@ -172,6 +172,11 @@ int update_bitrate() {
   if (ret != 0) return -1;
   int rtt = (int)stats.msRTT;
 
+  // Rolling average of the network throughput
+  static double throughput = 0.0;
+  throughput *= 0.97;
+  throughput += ((double)stats.mbpsSendRate * 1000.0 * 1000.0 / 1024.0) * 0.03;
+
   // Update the average RTT
   static double rtt_avg = 0;
   if (rtt_avg == 0.0) {
@@ -242,7 +247,7 @@ int update_bitrate() {
   // round the bitrate we set to 100 kbps
   int rounded_br = bitrate / (100*1000) * (100*1000);
 
-  update_overlay(rounded_br, rtt, rtt_th_min, rtt_th_max, bs, bs_th1, bs_th2, bs_th3);
+  update_overlay(rounded_br, throughput, rtt, rtt_th_min, rtt_th_max, bs, bs_th1, bs_th2, bs_th3);
 
   if (bitrate != cur_bitrate) {
     cur_bitrate = bitrate;
@@ -585,7 +590,7 @@ int main(int argc, char** argv) {
 
   // Optional bitrate overlay
   overlay = gst_bin_get_by_name(GST_BIN(gst_pipeline), "overlay");
-  update_overlay(0,0,0,0,0,0,0,0);
+  update_overlay(0,0,0,0,0,0,0,0,0);
 
 
   // Optional sound delay via an identity element
