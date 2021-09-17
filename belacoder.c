@@ -92,8 +92,10 @@ void update_overlay(int set_bitrate, double throughput,
                     int bs, int bs_th1, int bs_th2, int bs_th3) {
   if (GST_IS_ELEMENT(overlay)) {
     char overlay_text[100];
-    snprintf(overlay_text, 100, "  b: %4d/%.0f\nrtt: %3d/%3d/%3d\n bs: %3d/%3d/%3d/%3d",
-             set_bitrate/1000, throughput, rtt, rtt_th_min, rtt_th_max, bs, bs_th1, bs_th2, bs_th3);
+    snprintf(overlay_text, 100, "  b: %5d/%5.0f rtt: %3d/%3d/%3d bs: %3d/%3d/%3d/%3d",
+             set_bitrate/1000, throughput,
+             rtt, rtt_th_min, rtt_th_max,
+             bs, bs_th1, bs_th2, bs_th3);
     g_object_set (G_OBJECT(overlay), "text", overlay_text, NULL);
   }
 }
