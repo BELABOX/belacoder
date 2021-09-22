@@ -360,6 +360,7 @@ int connect_srt(char *host, char *port, char *stream_id) {
 void exit_syntax() {
   fprintf(stderr, "Syntax: belacoder PIPELINE_FILE ADDR PORT [options]\n\n");
   fprintf(stderr, "Options:\n");
+  fprintf(stderr, "  -v                  Print the version and exit\n");
   fprintf(stderr, "  -d <delay>          Audio-video delay in milliseconds\n");
   fprintf(stderr, "  -s <streamid>       SRT stream ID\n");
   fprintf(stderr, "  -l <latency>        SRT latency in milliseconds\n");
@@ -407,7 +408,7 @@ int main(int argc, char** argv) {
   char *stream_id = NULL;
   srt_latency = DEF_SRT_LATENCY;
 
-  while ((opt = getopt(argc, argv, "d:b:s:l:")) != -1) {
+  while ((opt = getopt(argc, argv, "d:b:s:l:v")) != -1) {
     switch (opt) {
       case 'b':
         bitrate_filename = optarg;
@@ -430,6 +431,9 @@ int main(int argc, char** argv) {
           exit_syntax();
         }
         break;
+      case 'v':
+        printf(VERSION "\n");
+        exit(0);
       default:
         exit_syntax();
     }
