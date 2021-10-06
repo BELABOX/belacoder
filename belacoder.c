@@ -380,6 +380,72 @@ static void cb_delay (GstElement *identity, GstBuffer *buffer, gpointer data) {
   GST_BUFFER_PTS (buffer) += GST_SECOND * abs(av_delay) / 1000;
 }
 
+static int get_sink_framerate(GstElement *element, gint *numerator, gint *denominator) {
+  int ret = -1;
+
+  GstPad *pad = gst_element_get_static_pad(element, "sink");
+  if (!pad) {
+    return -1;
+  }
+
+  GstCaps *caps = gst_pad_get_current_caps(pad);
+  if (caps != NULL) {
+    if (gst_caps_is_fixed(caps)) {
+      const GstStructure *str = gst_caps_get_structure (caps, 0);
+      if (gst_structure_get_fraction(str, "framerate", numerator, denominator)) {
+        ret = 0;
+      }
+    }
+
+    gst_caps_unref(caps);
+  }
+
+  gst_object_unref(pad);
+  return ret;
+}
+
+static void cb_ptsfixup(GstElement *identity, GstBuffer *buffer, gpointer data) {
+  static unsigned long prev_pts = 0;
+  static long period = 0;
+
+  buffer = gst_buffer_make_writable(buffer);
+
+  // get rid of the DTS, the following elements should use the PTS
+  GST_BUFFER_DTS(buffer) = 0;
+
+  unsigned long pts = 0;
+
+  // First frame, obtain the framerate and initial PTS
+  if (prev_pts == 0) {
+    int fr_numerator = 0, fr_denominator = 0;
+    if (get_sink_framerate(identity, &fr_numerator, &fr_denominator) == 0) {
+      pts = GST_BUFFER_PTS (buffer);
+      period = GST_SECOND * fr_denominator / fr_numerator;
+      printf("%s: framerate: %d / %d, period is %ld\n",
+             __FUNCTION__, fr_numerator, fr_denominator, period);
+    }
+
+  // Subsequent frames, adjust the PTS
+  } else {
+    long diff = GST_BUFFER_PTS(buffer) - prev_pts;
+
+    long incr = 0;
+    /* As long as it isn't an out of order frame, we assume at least one period
+       has passed. If it has jumped forward more than 1.5 periods, we'll skip
+       one or more periods as required to catch up */
+    if (diff >= 0) {
+      incr = ((diff - period/2) / period) * period + period;
+    }
+    pts = prev_pts + incr;
+
+    debug("%s: in pts: %lu, out pts: %lu, incr %ld, diff %ld\n",
+           __FUNCTION__, GST_BUFFER_PTS(buffer), pts, incr, diff);
+    GST_BUFFER_PTS (buffer) = pts;
+  }
+
+  prev_pts = pts;
+}
+
 void cb_pipeline (GstBus *bus, GstMessage *message, gpointer user_data) {
   switch(GST_MESSAGE_TYPE(message)) {
     case GST_MESSAGE_ERROR:
@@ -512,6 +578,19 @@ int main(int argc, char** argv) {
   } else {
     fprintf(stderr, "Failed to get a delay element from the pipeline, not applying a delay\n");
   }
+
+
+  // Optional video PTS interval fixup
+  // To avoid OBS dropping frames due to PTS jitter
+  identity_elem = gst_bin_get_by_name(GST_BIN(gst_pipeline), "ptsfixup");
+  if (GST_IS_ELEMENT(identity_elem)) {
+    g_object_set(G_OBJECT(identity_elem), "signal-handoffs", TRUE, NULL);
+    g_signal_connect(identity_elem, "handoff", G_CALLBACK(cb_ptsfixup), NULL);
+  } else {
+    fprintf(stderr, "Failed to get a ptsfixup element from the pipeline, "
+                    "not removing PTS jitter\n");
+  }
+
 
   // Optional SRT streaming via an appsink (needed for dynamic video bitrate)
   GstAppSinkCallbacks callbacks = {NULL, NULL, new_buf_cb};
