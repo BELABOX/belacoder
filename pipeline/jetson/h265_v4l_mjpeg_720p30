@@ -1,6 +1,6 @@
-v4l2src ! 
+v4l2src ! image/jpeg,width=1280,height=720,framerate=30/1 ! 
 identity name=v_delay signal-handoffs=TRUE ! 
-image/jpeg,width=1280,height=720,framerate=30/1 ! jpegparse ! jpegdec ! 
+nvv4l2decoder mjpeg=1 enable-max-performance=true ! nvvidconv ! 
 textoverlay text='' valignment=top halignment=right font-desc="Sans, 10" name=overlay ! 
 nvvidconv interpolation-method=5 ! 
 nvv4l2h265enc control-rate=1 qp-range="28,50:0,38:0,50" iframeinterval=60 preset-level=4 maxperf-enable=true EnableTwopassCBR=true insert-sps-pps=true name=venc_bps ! 
