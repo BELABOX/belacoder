@@ -87,6 +87,30 @@ uint64_t getms() {
   return time.tv_sec * 1000 + time.tv_nsec / 1000 / 1000;
 }
 
+/*
+  This checks periodically for pipeline stalls. The alsasrc element tends to stall rather
+  than error out when the input resolution changes for a live input into a Camlink 4K
+  connected to a Jetson Nano. If you see this happening in other scenarios, please report it
+*/
+int cooldown = 0;
+gboolean stall_check(gpointer data) {
+  static gint64 prev_pos = -1;
+  gint64 pos;
+  if (!gst_element_query_position((GstElement *)gst_pipeline, GST_FORMAT_TIME, &pos))
+    return TRUE;
+
+  if (pos != -1 && pos == prev_pos) {
+    cooldown = 3;
+    fprintf(stderr, "Pipeline stall detected. "
+                    "Will try to restart the piepline in %d seconds...\n", cooldown);
+    g_main_loop_quit(loop);
+    cooldown = cooldown*1000*1000;
+  }
+
+  prev_pos = pos;
+  return TRUE;
+}
+
 void update_overlay(int set_bitrate, double throughput,
                     int rtt, int rtt_th_min, int rtt_th_max,
                     int bs, int bs_th1, int bs_th2, int bs_th3) {
@@ -631,6 +655,7 @@ int main(int argc, char** argv) {
 
   loop = g_main_loop_new (NULL, FALSE);
   signal(SIGTERM, cb_sigterm);
+  g_timeout_add(1000, stall_check, NULL); // check every second
 
   /*
     If the gstreamer pipeline encounters an error, attempt to restart it
@@ -665,7 +690,9 @@ int main(int argc, char** argv) {
     }
 
     /* Rate limiting */
-    usleep(1000*1000); // 1s
+    if (!quit)
+      usleep((cooldown > 0) ? cooldown : 1000*1000);
+    cooldown = 0;
   }
 
   return 0;
