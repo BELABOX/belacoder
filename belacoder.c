@@ -157,6 +157,8 @@ ret_err:
   return -2;
 }
 
+#define SRT_PKT_SIZE 1316
+#define RTT_TO_BS(rtt) ((throughput / 8) * (rtt) / 1316)
 int update_bitrate() {
   static uint64_t next_bitrate_check = 0;
 
@@ -243,6 +245,7 @@ int update_bitrate() {
   int bitrate = cur_bitrate;
   int bs_th3 = (bs_avg + bs_jitter)*4;
   int bs_th2 = max(50, bs_avg + max(bs_jitter*3.0, bs_avg));
+  bs_th2 = min(bs_th2, RTT_TO_BS(srt_latency/2));
   int bs_th1 = max(50, bs_avg + bs_jitter*2.5);
   int rtt_th_max = rtt_avg + max(rtt_jitter*4, rtt_avg*15/100);
   int rtt_th_min = rtt_min + rtt_jitter*2;
@@ -286,7 +289,6 @@ int update_bitrate() {
   return 0;
 }
 
-#define SRT_PKT_SIZE 1316
 GstFlowReturn new_buf_cb(GstAppSink *sink, gpointer user_data) {
   static char pkt[SRT_PKT_SIZE];
   static int pkt_len = 0;
