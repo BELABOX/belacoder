@@ -428,8 +428,8 @@ static int get_sink_framerate(GstElement *element, gint *numerator, gint *denomi
   return ret;
 }
 
+unsigned long prev_pts = 0;
 static void cb_ptsfixup(GstElement *identity, GstBuffer *buffer, gpointer data) {
-  static unsigned long prev_pts = 0;
   static long period = 0;
 
   buffer = gst_buffer_make_writable(buffer);
@@ -664,9 +664,11 @@ int main(int argc, char** argv) {
     }
 
     /* Rate limiting */
-    if (!quit)
+    if (!quit) {
       usleep((cooldown > 0) ? cooldown : 1000*1000);
-    cooldown = 0;
+      cooldown = 0; // reset the custom cooldown
+      prev_pts = 0; // reset the ptsfix element
+    }
   }
 
   return 0;
