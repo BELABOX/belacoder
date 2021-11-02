@@ -437,13 +437,11 @@ static void cb_ptsfixup(GstElement *identity, GstBuffer *buffer, gpointer data) 
   // get rid of the DTS, the following elements should use the PTS
   GST_BUFFER_DTS(buffer) = 0;
 
-  unsigned long pts = 0;
-
   // First frame, obtain the framerate and initial PTS
   if (prev_pts == 0) {
     int fr_numerator = 0, fr_denominator = 0;
     if (get_sink_framerate(identity, &fr_numerator, &fr_denominator) == 0) {
-      pts = GST_BUFFER_PTS (buffer);
+      prev_pts = GST_BUFFER_PTS (buffer);
       period = GST_SECOND * fr_denominator / fr_numerator;
       printf("%s: framerate: %d / %d, period is %ld\n",
              __FUNCTION__, fr_numerator, fr_denominator, period);
@@ -452,22 +450,20 @@ static void cb_ptsfixup(GstElement *identity, GstBuffer *buffer, gpointer data) 
   // Subsequent frames, adjust the PTS
   } else {
     long diff = GST_BUFFER_PTS(buffer) - prev_pts;
-
-    long incr = 0;
+    unsigned long pts = 0, incr = 0;
     /* As long as it isn't an out of order frame, we assume at least one period
        has passed. If it has jumped forward more than 1.5 periods, we'll skip
        one or more periods as required to catch up */
     if (diff >= 0) {
       incr = ((diff - period/2) / period) * period + period;
+      pts = prev_pts + incr;
+      prev_pts = pts;
     }
-    pts = prev_pts + incr;
 
     debug("%s: in pts: %lu, out pts: %lu, incr %ld, diff %ld\n",
            __FUNCTION__, GST_BUFFER_PTS(buffer), pts, incr, diff);
     GST_BUFFER_PTS (buffer) = pts;
   }
-
-  prev_pts = pts;
 }
 
 void cb_pipeline (GstBus *bus, GstMessage *message, gpointer user_data) {
