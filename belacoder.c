@@ -100,7 +100,7 @@ gboolean stall_check(gpointer data) {
   if (pos != -1 && pos == prev_pos) {
     cooldown = 3;
     fprintf(stderr, "Pipeline stall detected. "
-                    "Will try to restart the piepline in %d seconds...\n", cooldown);
+                    "Will try to restart the pipeline in %d seconds...\n", cooldown);
     g_main_loop_quit(loop);
     cooldown = cooldown*1000*1000;
   }
