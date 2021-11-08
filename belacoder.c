@@ -428,20 +428,20 @@ static int get_sink_framerate(GstElement *element, gint *numerator, gint *denomi
   return ret;
 }
 
-unsigned long prev_pts = 0;
+unsigned long pts = 0;
 static void cb_ptsfixup(GstElement *identity, GstBuffer *buffer, gpointer data) {
   static long period = 0;
-
-  buffer = gst_buffer_make_writable(buffer);
+  static long prev_pts = 0;
+  long input_pts = GST_BUFFER_PTS(buffer);
 
   // get rid of the DTS, the following elements should use the PTS
   GST_BUFFER_DTS(buffer) = 0;
 
   // First frame, obtain the framerate and initial PTS
-  if (prev_pts == 0) {
+  if (pts == 0) {
     int fr_numerator = 0, fr_denominator = 0;
     if (get_sink_framerate(identity, &fr_numerator, &fr_denominator) == 0) {
-      prev_pts = GST_BUFFER_PTS (buffer);
+      pts = input_pts;
       period = GST_SECOND * fr_denominator / fr_numerator;
       printf("%s: framerate: %d / %d, period is %ld\n",
              __FUNCTION__, fr_numerator, fr_denominator, period);
@@ -449,21 +449,38 @@ static void cb_ptsfixup(GstElement *identity, GstBuffer *buffer, gpointer data) 
 
   // Subsequent frames, adjust the PTS
   } else {
-    long diff = GST_BUFFER_PTS(buffer) - prev_pts;
-    unsigned long pts = 0, incr = 0;
-    /* As long as it isn't an out of order frame, we assume at least one period
-       has passed. If it has jumped forward more than 1.5 periods, we'll skip
-       one or more periods as required to catch up */
-    if (diff >= 0) {
-      incr = ((diff - period/2) / period) * period + period;
-      pts = prev_pts + incr;
-      prev_pts = pts;
-    }
+    #define AVG_MULT 1000
+    #define AVG_WEIGHT 3 // AVG_WEIGHT out of AVG_MULT
+    #define AVG_PREV (AVG_MULT-AVG_WEIGHT)
+    #define AVG_ROUNDING (AVG_MULT/2)
+    /* Rolling average to account for slight differences from the nominal framerate
+       and even slight drifting over time due to temperature or voltage variation
+       Have to add AVG_ROUNDING to avoid precision loss due to dividing by AVG_MULT
+    */
+    period = (period * AVG_PREV + AVG_ROUNDING) / AVG_MULT +
+             ((input_pts - prev_pts) * AVG_WEIGHT + AVG_ROUNDING)/ AVG_MULT;
 
-    debug("%s: in pts: %lu, out pts: %lu, incr %ld, diff %ld\n",
-           __FUNCTION__, GST_BUFFER_PTS(buffer), pts, incr, diff);
-    GST_BUFFER_PTS (buffer) = pts;
+    /* As long as the input PTS is within 0 to 2.0 periods of the previous
+       output PTS, assume that it was a continuous read at period ns from
+       the previous frame and increment the PTS accordingly. Otherwise, handle
+       the discontinuity by either dropping an input buffer or skipping an
+       output period, as needed. */
+    long diff = input_pts - pts;
+    long incr = (diff/2 + period) / period * period;
+    if (incr > 0) {
+      pts += incr;
+      debug("%s: in pts: %lu, out pts: %lu, incr %ld, diff %ld, period %ld\n",
+             __FUNCTION__, GST_BUFFER_PTS(buffer), pts, incr, diff, period);
+      GST_BUFFER_PTS(buffer) = pts;
+    } else {
+      // TODO: actually drop this frame
+      debug("skipping frame: pts %lu, prev pts %lu, output pts: %lu, diff %ld\n",
+             input_pts, prev_pts, pts, diff);
+      GST_BUFFER_PTS(buffer) = 0;
+    }
   }
+
+  prev_pts = input_pts;
 }
 
 void cb_pipeline (GstBus *bus, GstMessage *message, gpointer user_data) {
@@ -663,7 +680,7 @@ int main(int argc, char** argv) {
     if (!quit) {
       usleep((cooldown > 0) ? cooldown : 1000*1000);
       cooldown = 0; // reset the custom cooldown
-      prev_pts = 0; // reset the ptsfix element
+      pts = 0; // reset the ptsfix element
     }
   }
 
