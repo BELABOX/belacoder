@@ -491,6 +491,7 @@ void cb_pipeline (GstBus *bus, GstMessage *message, gpointer user_data) {
       break;
     case GST_MESSAGE_EOS:
       fprintf(stderr, "gstreamer eos\n");
+      quit = 1;
       g_main_loop_quit(loop);
       break;
     default:
