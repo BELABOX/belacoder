@@ -64,7 +64,7 @@
 static GstPipeline *gst_pipeline = NULL;
 GMainLoop *loop;
 GstElement *encoder, *overlay;
-SRTSOCKET sock;
+SRTSOCKET sock = -1;
 int quit = 0;
 
 int enc_bitrate_div = 1;
@@ -85,6 +85,16 @@ uint64_t getms() {
   return time.tv_sec * 1000 + time.tv_nsec / 1000 / 1000;
 }
 
+/* Attempts to stop the gstreamer pipeline cleanly
+   Also sets up an alarm in case it doesn't */
+void stop() {
+  if (!quit) {
+    quit = 1;
+    alarm(3);
+    g_main_loop_quit(loop);
+  }
+}
+
 /*
   This checks periodically for pipeline stalls. The alsasrc element tends to stall rather
   than error out when the input resolution changes for a live input into a Camlink 4K
@@ -95,7 +105,7 @@ gboolean stall_check(gpointer data) {
      starting the loop. Couldn't find another way to avoid races / potentially
      losing signals */
   if (quit) {
-    g_main_loop_quit(loop);
+    stop();
     return TRUE;
   }
 
@@ -106,7 +116,7 @@ gboolean stall_check(gpointer data) {
 
   if (pos != -1 && pos == prev_pos) {
     fprintf(stderr, "Pipeline stall detected. Will exit now\n");
-    g_main_loop_quit(loop);
+    stop();
   }
 
   prev_pos = pos;
@@ -491,20 +501,23 @@ void cb_pipeline (GstBus *bus, GstMessage *message, gpointer user_data) {
   switch(GST_MESSAGE_TYPE(message)) {
     case GST_MESSAGE_ERROR:
       fprintf(stderr, "gstreamer error from %s\n", message->src->name);
-      g_main_loop_quit(loop);
+      stop();
       break;
     case GST_MESSAGE_EOS:
       fprintf(stderr, "gstreamer eos from %s\n", message->src->name);
-      g_main_loop_quit(loop);
+      stop();
       break;
     default:
       break;
   }
 }
 
-void cb_sigterm(int signum) {
-  quit = 1;
-  g_main_loop_quit(loop);
+// Only called if the pipeline failed to stop
+void cb_sigalarm(int signum) {
+  if (sock >= 0) {
+    srt_close(sock);
+  }
+  exit(0);
 }
 
 #define FIXED_ARGS 3
@@ -645,7 +658,9 @@ int main(int argc, char** argv) {
   }
 
   loop = g_main_loop_new (NULL, FALSE);
-  signal(SIGTERM, cb_sigterm);
+  signal(SIGTERM, stop);
+  signal(SIGINT, stop);
+  signal(SIGALRM, cb_sigalarm);
   g_timeout_add(1000, stall_check, NULL); // check every second
 
   /*
@@ -668,7 +683,7 @@ int main(int argc, char** argv) {
   g_main_loop_run(loop);
   gst_element_set_state((GstElement*)gst_pipeline, GST_STATE_NULL);
 
-  if (GST_IS_ELEMENT(srt_app_sink)) {
+  if (sock >= 0) {
     srt_close(sock);
   }
 
