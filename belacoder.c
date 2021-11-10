@@ -66,7 +66,7 @@
 static GstPipeline *gst_pipeline = NULL;
 GMainLoop *loop;
 GstElement *encoder, *overlay;
-SRTSOCKET sock;
+SRTSOCKET sock = -1;
 int quit = 0;
 
 int enc_bitrate_div = 1;
@@ -87,24 +87,38 @@ uint64_t getms() {
   return time.tv_sec * 1000 + time.tv_nsec / 1000 / 1000;
 }
 
+/* Attempts to stop the gstreamer pipeline cleanly
+   Also sets up an alarm in case it doesn't */
+void stop() {
+  if (!quit) {
+    quit = 1;
+    alarm(3);
+    g_main_loop_quit(loop);
+  }
+}
+
 /*
   This checks periodically for pipeline stalls. The alsasrc element tends to stall rather
   than error out when the input resolution changes for a live input into a Camlink 4K
   connected to a Jetson Nano. If you see this happening in other scenarios, please report it
 */
-int cooldown = 0;
 gboolean stall_check(gpointer data) {
+  /* This will handle any signals delivered between setting up the handler and
+     starting the loop. Couldn't find another way to avoid races / potentially
+     losing signals */
+  if (quit) {
+    stop();
+    return TRUE;
+  }
+
   static gint64 prev_pos = -1;
   gint64 pos;
   if (!gst_element_query_position((GstElement *)gst_pipeline, GST_FORMAT_TIME, &pos))
     return TRUE;
 
   if (pos != -1 && pos == prev_pos) {
-    cooldown = 3;
-    fprintf(stderr, "Pipeline stall detected. "
-                    "Will try to restart the pipeline in %d seconds...\n", cooldown);
-    g_main_loop_quit(loop);
-    cooldown = cooldown*1000*1000;
+    fprintf(stderr, "Pipeline stall detected. Will exit now\n");
+    stop();
   }
 
   prev_pos = pos;
@@ -514,22 +528,24 @@ static void cb_ptsfixup(GstElement *identity, GstBuffer *buffer, gpointer data) 
 void cb_pipeline (GstBus *bus, GstMessage *message, gpointer user_data) {
   switch(GST_MESSAGE_TYPE(message)) {
     case GST_MESSAGE_ERROR:
-      fprintf(stderr, "gstreamer error\n");
-      g_main_loop_quit(loop);
+      fprintf(stderr, "gstreamer error from %s\n", message->src->name);
+      stop();
       break;
     case GST_MESSAGE_EOS:
-      fprintf(stderr, "gstreamer eos\n");
-      quit = 1;
-      g_main_loop_quit(loop);
+      fprintf(stderr, "gstreamer eos from %s\n", message->src->name);
+      stop();
       break;
     default:
       break;
   }
 }
 
-void cb_sigterm(int signum) {
-  quit = 1;
-  g_main_loop_quit(loop);
+// Only called if the pipeline failed to stop
+void cb_sigalarm(int signum) {
+  if (sock >= 0) {
+    srt_close(sock);
+  }
+  exit(0);
 }
 
 #define FIXED_ARGS 3
@@ -670,47 +686,33 @@ int main(int argc, char** argv) {
   }
 
   loop = g_main_loop_new (NULL, FALSE);
-  signal(SIGTERM, cb_sigterm);
+  signal(SIGTERM, stop);
+  signal(SIGINT, stop);
+  signal(SIGALRM, cb_sigalarm);
   g_timeout_add(1000, stall_check, NULL); // check every second
 
   /*
-    If the gstreamer pipeline encounters an error, attempt to restart it
-    This could happen for example if the capture card is momentary unplugged
-
-    We close and reopen the SRT socket because 1) sometimes media players take a
-    while to recover / resync if we restart the stream over the same connection
-    and 2) because if we take too long, the SRT connection will timeout and
-    we'll just get an SRT error as soon the pipeline succesfully restarts.
-
-    1) relies on any SRT relay servers to close the connection to the video
-    player when the ingest connection is closed, and also on the video player to
-    reconnect. This results in reliable, speedy recovery when using OBS and the
-    Belabox Cloud SRT relay service.
+    We used to attempt to restart the pipeline in case of errors
+    However the version of flvdemux distributed with Ubuntu 18.04
+    for the Jetson Nano fails to restart.
+    Rather than deal with glitchy pipeline elements, just give up
+    and exit. Ensure you run belacoder in a wrapper script which
+    can restart it if needed, e.g. belaUI
   */
-  while(1) {
-    if (quit) {
-      exit(0);
-    }
-    if (GST_IS_ELEMENT(srt_app_sink)) {
-      int ret_srt = connect_srt(srt_host, srt_port, stream_id);
-      if (ret_srt != 0) continue;
-    }
+  if (GST_IS_ELEMENT(srt_app_sink)) {
+    int ret_srt;
+    do {
+      ret_srt = connect_srt(srt_host, srt_port, stream_id);
+    } while(ret_srt != 0);
+  }
 
-    // Everything good so far, start the gstreamer pipeline
-    gst_element_set_state((GstElement*)gst_pipeline, GST_STATE_PLAYING);
-    g_main_loop_run(loop);
-    gst_element_set_state((GstElement*)gst_pipeline, GST_STATE_NULL);
+  // Everything good so far, start the gstreamer pipeline
+  gst_element_set_state((GstElement*)gst_pipeline, GST_STATE_PLAYING);
+  g_main_loop_run(loop);
+  gst_element_set_state((GstElement*)gst_pipeline, GST_STATE_NULL);
 
-    if (GST_IS_ELEMENT(srt_app_sink)) {
-      srt_close(sock);
-    }
-
-    /* Rate limiting */
-    if (!quit) {
-      usleep((cooldown > 0) ? cooldown : 1000*1000);
-      cooldown = 0; // reset the custom cooldown
-      pts = 0; // reset the ptsfix element
-    }
+  if (sock >= 0) {
+    srt_close(sock);
   }
 
   return 0;
