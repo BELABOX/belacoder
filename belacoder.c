@@ -281,7 +281,7 @@ GstFlowReturn new_buf_cb(GstAppSink *sink, gpointer user_data) {
 
   GstSample *sample = gst_app_sink_pull_sample(sink);
 
-  if (!sample) exit(1);
+  if (!sample) exit(EXIT_FAILURE);
 
   // We can only update the bitrate when we have an appsink and a configurable video_enc
   if (GST_IS_ELEMENT(encoder)) {
@@ -514,7 +514,7 @@ void cb_pipeline (GstBus *bus, GstMessage *message, gpointer user_data) {
 
 // Only called if the pipeline failed to stop
 void cb_sigalarm(int signum) {
-  _exit(0);
+  _exit(EXIT_SUCCESS); // exiting deliberately following SIGINT or SIGTERM
 }
 
 #define FIXED_ARGS 3
@@ -550,7 +550,7 @@ int main(int argc, char** argv) {
         break;
       case 'v':
         printf(VERSION "\n");
-        exit(0);
+        exit(EXIT_SUCCESS);
       default:
         exit_syntax();
     }
