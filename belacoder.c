@@ -657,11 +657,12 @@ int main(int argc, char** argv) {
     srt_startup();
   }
 
-  loop = g_main_loop_new (NULL, FALSE);
-  signal(SIGTERM, stop);
-  signal(SIGINT, stop);
-  signal(SIGALRM, cb_sigalarm);
-  g_timeout_add(1000, stall_check, NULL); // check every second
+  if (GST_IS_ELEMENT(srt_app_sink)) {
+    int ret_srt;
+    do {
+      ret_srt = connect_srt(srt_host, srt_port, stream_id);
+    } while(ret_srt != 0);
+  }
 
   /*
     We used to attempt to restart the pipeline in case of errors
@@ -671,12 +672,11 @@ int main(int argc, char** argv) {
     and exit. Ensure you run belacoder in a wrapper script which
     can restart it if needed, e.g. belaUI
   */
-  if (GST_IS_ELEMENT(srt_app_sink)) {
-    int ret_srt;
-    do {
-      ret_srt = connect_srt(srt_host, srt_port, stream_id);
-    } while(ret_srt != 0);
-  }
+  loop = g_main_loop_new (NULL, FALSE);
+  signal(SIGTERM, stop);
+  signal(SIGINT, stop);
+  signal(SIGALRM, cb_sigalarm);
+  g_timeout_add(1000, stall_check, NULL); // check every second
 
   // Everything good so far, start the gstreamer pipeline
   gst_element_set_state((GstElement*)gst_pipeline, GST_STATE_PLAYING);
