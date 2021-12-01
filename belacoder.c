@@ -309,7 +309,7 @@ GstFlowReturn new_buf_cb(GstAppSink *sink, gpointer user_data) {
 
   GstSample *sample = gst_app_sink_pull_sample(sink);
 
-  if (!sample) exit(1);
+  if (!sample) exit(EXIT_FAILURE);
 
   // We can only update the bitrate when we have an appsink and a configurable video_enc
   if (GST_IS_ELEMENT(encoder)) {
@@ -542,10 +542,7 @@ void cb_pipeline (GstBus *bus, GstMessage *message, gpointer user_data) {
 
 // Only called if the pipeline failed to stop
 void cb_sigalarm(int signum) {
-  if (sock >= 0) {
-    srt_close(sock);
-  }
-  exit(0);
+  _exit(EXIT_SUCCESS); // exiting deliberately following SIGINT or SIGTERM
 }
 
 #define FIXED_ARGS 3
@@ -581,7 +578,7 @@ int main(int argc, char** argv) {
         break;
       case 'v':
         printf(VERSION "\n");
-        exit(0);
+        exit(EXIT_SUCCESS);
       default:
         exit_syntax();
     }
@@ -685,11 +682,12 @@ int main(int argc, char** argv) {
     srt_startup();
   }
 
-  loop = g_main_loop_new (NULL, FALSE);
-  signal(SIGTERM, stop);
-  signal(SIGINT, stop);
-  signal(SIGALRM, cb_sigalarm);
-  g_timeout_add(1000, stall_check, NULL); // check every second
+  if (GST_IS_ELEMENT(srt_app_sink)) {
+    int ret_srt;
+    do {
+      ret_srt = connect_srt(srt_host, srt_port, stream_id);
+    } while(ret_srt != 0);
+  }
 
   /*
     We used to attempt to restart the pipeline in case of errors
@@ -699,12 +697,11 @@ int main(int argc, char** argv) {
     and exit. Ensure you run belacoder in a wrapper script which
     can restart it if needed, e.g. belaUI
   */
-  if (GST_IS_ELEMENT(srt_app_sink)) {
-    int ret_srt;
-    do {
-      ret_srt = connect_srt(srt_host, srt_port, stream_id);
-    } while(ret_srt != 0);
-  }
+  loop = g_main_loop_new (NULL, FALSE);
+  signal(SIGTERM, stop);
+  signal(SIGINT, stop);
+  signal(SIGALRM, cb_sigalarm);
+  g_timeout_add(1000, stall_check, NULL); // check every second
 
   // Everything good so far, start the gstreamer pipeline
   gst_element_set_state((GstElement*)gst_pipeline, GST_STATE_PLAYING);
