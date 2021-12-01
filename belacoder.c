@@ -514,10 +514,7 @@ void cb_pipeline (GstBus *bus, GstMessage *message, gpointer user_data) {
 
 // Only called if the pipeline failed to stop
 void cb_sigalarm(int signum) {
-  if (sock >= 0) {
-    srt_close(sock);
-  }
-  exit(0);
+  _exit(0);
 }
 
 #define FIXED_ARGS 3
