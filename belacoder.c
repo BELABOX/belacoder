@@ -686,6 +686,9 @@ int main(int argc, char** argv) {
     int ret_srt;
     do {
       ret_srt = connect_srt(srt_host, srt_port, stream_id);
+      if (ret_srt != 0) {
+        usleep(500*1000);
+      }
     } while(ret_srt != 0);
   }
 
