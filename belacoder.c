@@ -687,6 +687,7 @@ int main(int argc, char** argv) {
     do {
       ret_srt = connect_srt(srt_host, srt_port, stream_id);
       if (ret_srt != 0) {
+        fprintf(stderr, "Failed to establish an SRT connection. Retrying...\n");
         usleep(500*1000);
       }
     } while(ret_srt != 0);
