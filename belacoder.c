@@ -278,7 +278,7 @@ int update_bitrate() {
     next_bitrate_decr = ctime + BITRATE_DECR_INT;
 
   } else if (ctime > next_bitrate_incr &&
-             rtt < rtt_th_min && rtt_avg_delta < 0.0) {
+             rtt < rtt_th_min && rtt_avg_delta < 0.5) {
     bitrate += BITRATE_INCR_MIN + bitrate / BITRATE_INCR_SCALE;
     next_bitrate_incr = ctime + BITRATE_INCR_INT;
   }
