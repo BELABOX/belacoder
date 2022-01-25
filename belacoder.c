@@ -35,8 +35,10 @@
 #define DEF_BITRATE (6 * 1000 * 1000)
 
 #define BITRATE_UPDATE_INT 20
-#define BITRATE_INCR_STEP      (100*1000) // the bitrate increment step (bps)
-#define BITRATE_INCR_INT       300        // the minimum interval for increasing the bitrate (ms)
+#define BITRATE_INCR_MIN       (30*1000)  // the minimum bitrate increment step (bps)
+#define BITRATE_INCR_INT       500        // the minimum interval for increasing the bitrate (ms)
+#define BITRATE_INCR_SCALE     30         // the bitrate is increased by
+                                          // BITRATE_INCR_MIN + cur_bitrate/BITRATE_INCR_SCALE
 
 #define BITRATE_DECR_MIN       (100*1000) // the minimum value to decrease the bitrate by (bps)
 #define BITRATE_DECR_INT       200        // (light congestion) min interval for decreasing the bitrate (ms)
@@ -164,6 +166,8 @@ ret_err:
   return -2;
 }
 
+#define SRT_PKT_SIZE 1316
+#define RTT_TO_BS(rtt) ((throughput / 8) * (rtt) / SRT_PKT_SIZE)
 int update_bitrate() {
   static uint64_t next_bitrate_check = 0;
 
@@ -235,46 +239,68 @@ int update_bitrate() {
   }
 
 
+  /*
+   * Rolling average of the network throughput
+   */
+  static double throughput = 0.0;
+  throughput *= 0.97;
+  throughput += ((double)stats.mbpsSendRate * 1000.0 * 1000.0 / 1024.0) * 0.03;
+
+
   debug("bs: %d bs_avg: %f, bs_jitter %f, bitrate %d rtt %d, delta rtt %.0f, avg delta %.1f, avg rtt %.1f, rtt_jitter, %.2f, rtt_min %.1f\n",
         bs, bs_avg, bs_jitter, cur_bitrate, rtt, delta_rtt, rtt_avg_delta, rtt_avg, rtt_jitter, rtt_min);
 
 
-  static uint64_t next_bitrate_adj = 0;
-  if (ctime > next_bitrate_adj) {
-    int bitrate = cur_bitrate;
+  static uint64_t next_bitrate_incr = 0;
+  static uint64_t next_bitrate_decr = 0;
 
-    if (rtt > (srt_latency / 5) || bs > (bs_avg + max(bs_jitter*3.0, bs_avg))) {
-      bitrate -= BITRATE_DECR_MIN + bitrate/BITRATE_DECR_SCALE;
-      next_bitrate_adj = ctime + BITRATE_DECR_FAST_INT;
+  int bitrate = cur_bitrate;
+  int bs_th3 = (bs_avg + bs_jitter)*4;
+  int bs_th2 = max(50, bs_avg + max(bs_jitter*3.0, bs_avg));
+  bs_th2 = min(bs_th2, RTT_TO_BS(srt_latency/2));
+  int bs_th1 = max(50, bs_avg + bs_jitter*2.5);
+  int rtt_th_max = rtt_avg + max(rtt_jitter*4, rtt_avg*15/100);
+  int rtt_th_min = rtt_min + rtt_jitter*2;
 
-    } else if (rtt > (int)(rtt_avg + max(rtt_jitter*5, rtt_avg*10/100))) {
-      bitrate -= BITRATE_DECR_MIN;
-      next_bitrate_adj = ctime + BITRATE_DECR_INT;
 
-    } else if (rtt < (int)(rtt_min + rtt_jitter*2) && rtt_avg_delta < 0.0) {
-      bitrate += min(bitrate / 20, BITRATE_INCR_STEP);
-      next_bitrate_adj = ctime + BITRATE_INCR_INT;
-    }
+  if (bitrate > min_bitrate && (rtt >= (srt_latency / 3) || bs > bs_th3)) {
+    bitrate = min_bitrate;
+    next_bitrate_decr = ctime + BITRATE_DECR_INT;
 
-    bitrate = min_max(bitrate, min_bitrate, max_bitrate);
+  } else if (ctime > next_bitrate_decr &&
+      (rtt > (srt_latency / 5) || bs > bs_th2)) {
+    bitrate -= BITRATE_DECR_MIN + bitrate/BITRATE_DECR_SCALE;
+    next_bitrate_decr = ctime + BITRATE_DECR_FAST_INT;
 
-    if (bitrate != cur_bitrate) {
-      cur_bitrate = bitrate;
+  } else if (ctime > next_bitrate_decr &&
+             (rtt > rtt_th_max || bs > bs_th1)) {
+    bitrate -= BITRATE_DECR_MIN;
+    next_bitrate_decr = ctime + BITRATE_DECR_INT;
 
-      // round the bitrate we set to 100 kbps
-      bitrate = bitrate / (100 * 1000) * (100 * 1000);
-      g_object_set (G_OBJECT(encoder), "bitrate", bitrate / enc_bitrate_div, NULL);
+  } else if (ctime > next_bitrate_incr &&
+             rtt < rtt_th_min && rtt_avg_delta < 0.0) {
+    bitrate += BITRATE_INCR_MIN + bitrate / BITRATE_INCR_SCALE;
+    next_bitrate_incr = ctime + BITRATE_INCR_INT;
+  }
 
-      update_overlay(bitrate);
+  bitrate = min_max(bitrate, min_bitrate, max_bitrate);
 
-      debug("set bitrate to %d, internal value %d\n", bitrate, cur_bitrate);
-    }
+  // round the bitrate we set to 100 kbps
+  int rounded_br = bitrate / (100*1000) * (100*1000);
+
+  update_overlay(rounded_br);
+
+  if (bitrate != cur_bitrate) {
+    cur_bitrate = bitrate;
+
+    g_object_set (G_OBJECT(encoder), "bitrate", rounded_br / enc_bitrate_div, NULL);
+
+    debug("set bitrate to %d, internal value %d\n", rounded_br, cur_bitrate);
   }
 
   return 0;
 }
 
-#define SRT_PKT_SIZE 1316
 GstFlowReturn new_buf_cb(GstAppSink *sink, gpointer user_data) {
   static char pkt[SRT_PKT_SIZE];
   static int pkt_len = 0;
