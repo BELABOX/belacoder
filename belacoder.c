@@ -172,16 +172,9 @@ ret_err:
 }
 
 #define SRT_PKT_SIZE 1316
-#define RTT_TO_BS(rtt) ((throughput / 8) * (rtt) / 1316)
-int update_bitrate() {
-  static uint64_t next_bitrate_check = 0;
-
+#define RTT_TO_BS(rtt) ((throughput / 8) * (rtt) / SRT_PKT_SIZE)
+gboolean update_bitrate() {
   uint64_t ctime = getms();
-  if (ctime < next_bitrate_check) {
-    return 0;
-  }
-  next_bitrate_check = ctime + BITRATE_UPDATE_INT;
-
 
   /*
    * Send buffer size stats
@@ -189,7 +182,7 @@ int update_bitrate() {
   int bs = -1;
   int sz = sizeof(bs);
   int ret = srt_getsockflag(sock, SRTO_SNDDATA, &bs, &sz);
-  if (ret != 0 || bs < 0) return -1;
+  if (ret != 0 || bs < 0) goto ret;
 
   // Rolling average
   static double bs_avg = 0;
@@ -211,13 +204,8 @@ int update_bitrate() {
    */
   SRT_TRACEBSTATS stats;
   ret = srt_bstats(sock, &stats, 1);
-  if (ret != 0) return -1;
+  if (ret != 0) goto ret;
   int rtt = (int)stats.msRTT;
-
-  // Rolling average of the network throughput
-  static double throughput = 0.0;
-  throughput *= 0.97;
-  throughput += ((double)stats.mbpsSendRate * 1000.0 * 1000.0 / 1024.0) * 0.03;
 
   // Update the average RTT
   static double rtt_avg = 0;
@@ -247,6 +235,14 @@ int update_bitrate() {
   if (delta_rtt > rtt_jitter) {
     rtt_jitter = delta_rtt;
   }
+
+
+  /*
+   * Rolling average of the network throughput
+   */
+  static double throughput = 0.0;
+  throughput *= 0.97;
+  throughput += ((double)stats.mbpsSendRate * 1000.0 * 1000.0 / 1024.0) * 0.03;
 
 
   debug("bs: %d bs_avg: %f, bs_jitter %f, bitrate %d rtt %d, delta rtt %.0f, avg delta %.1f, avg rtt %.1f, rtt_jitter, %.2f, rtt_min %.1f\n",
@@ -300,7 +296,8 @@ int update_bitrate() {
     debug("set bitrate to %d, internal value %d\n", rounded_br, cur_bitrate);
   }
 
-  return 0;
+ret:
+  return TRUE;
 }
 
 GstFlowReturn new_buf_cb(GstAppSink *sink, gpointer user_data) {
@@ -310,11 +307,6 @@ GstFlowReturn new_buf_cb(GstAppSink *sink, gpointer user_data) {
   GstSample *sample = gst_app_sink_pull_sample(sink);
 
   if (!sample) exit(EXIT_FAILURE);
-
-  // We can only update the bitrate when we have an appsink and a configurable video_enc
-  if (GST_IS_ELEMENT(encoder)) {
-    if (update_bitrate() != 0) goto error;
-  }
 
   GstBuffer *buffer = NULL;
   GstMapInfo map = {0};
@@ -400,7 +392,7 @@ int connect_srt(char *host, char *port, char *stream_id) {
     assert(ret == 0);
   }
 
-  int32_t algo = 1;
+  int32_t algo = 0;
   ret = srt_setsockflag(sock, SRTO_RETRANSMITALGO, &algo, sizeof(algo));
   assert(ret == 0);
 
@@ -691,6 +683,11 @@ int main(int argc, char** argv) {
         usleep(500*1000);
       }
     } while(ret_srt != 0);
+  }
+
+  // We can only update the bitrate when we have an appsink and a configurable encoder
+  if (GST_IS_ELEMENT(encoder) && GST_IS_ELEMENT(srt_app_sink)) {
+    g_timeout_add(BITRATE_UPDATE_INT, update_bitrate, NULL);
   }
 
   /*
