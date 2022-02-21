@@ -392,7 +392,7 @@ int connect_srt(char *host, char *port, char *stream_id) {
     assert(ret == 0);
   }
 
-  int32_t algo = 0;
+  int32_t algo = 1;
   ret = srt_setsockflag(sock, SRTO_RETRANSMITALGO, &algo, sizeof(algo));
   assert(ret == 0);
 
