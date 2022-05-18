@@ -258,7 +258,7 @@ gboolean update_bitrate() {
   bs_th2 = min(bs_th2, RTT_TO_BS(srt_latency/2));
   int bs_th1 = max(50, bs_avg + bs_jitter*2.5);
   int rtt_th_max = rtt_avg + max(rtt_jitter*4, rtt_avg*15/100);
-  int rtt_th_min = rtt_min + rtt_jitter*2;
+  int rtt_th_min = rtt_min + max(1, rtt_jitter*2);
 
 
   if (bitrate > min_bitrate && (rtt >= (srt_latency / 3) || bs > bs_th3)) {
@@ -276,7 +276,7 @@ gboolean update_bitrate() {
     next_bitrate_decr = ctime + BITRATE_DECR_INT;
 
   } else if (ctime > next_bitrate_incr &&
-             rtt < rtt_th_min && rtt_avg_delta < 0.0) {
+             rtt < rtt_th_min && rtt_avg_delta < 0.01) {
     bitrate += BITRATE_INCR_MIN + bitrate / BITRATE_INCR_SCALE;
     next_bitrate_incr = ctime + BITRATE_INCR_INT;
   }
