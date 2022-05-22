@@ -342,20 +342,22 @@ GstFlowReturn new_buf_cb(GstAppSink *sink, gpointer user_data) {
 
     if (pkt_len == SRT_PKT_SIZE) {
       int nb = srt_send(sock, pkt, SRT_PKT_SIZE);
-      if (nb != SRT_PKT_SIZE) goto error;
+      if (nb != SRT_PKT_SIZE) {
+        fprintf(stderr, "The SRT connection failed, exiting\n");
+        stop();
+        goto ret;
+      }
       pkt_len = 0;
     }
 
     sample_sz -= copy_sz;
   } while(sample_sz);
 
+ret:
   gst_buffer_unmap(buffer, &map);
   gst_sample_unref (sample);
 
   return GST_FLOW_OK;
-
-error:
-  return GST_FLOW_ERROR;
 }
 
 int parse_ip(struct sockaddr_in *addr, char *ip_str) {
