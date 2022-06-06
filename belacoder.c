@@ -28,7 +28,8 @@
 
 #include <srt.h>
 
-#define SRT_MAX_OHEAD 20 // maximum SRT transmission overhead (when using appsink)
+#define SRT_MAX_OHEAD 20     // maximum SRT transmission overhead (when using appsink)
+#define SRT_ACK_TIMEOUT 6000 // maximum interval between received ACKs before the connection is TOed
 
 #define MIN_BITRATE (300 * 1000)
 #define ABS_MAX_BITRATE (30 * 1000 * 1000)
@@ -173,16 +174,14 @@ ret_err:
 
 #define SRT_PKT_SIZE 1316
 #define RTT_TO_BS(rtt) ((throughput / 8) * (rtt) / SRT_PKT_SIZE)
-gboolean update_bitrate() {
-  uint64_t ctime = getms();
-
+void update_bitrate(SRT_TRACEBSTATS *stats, uint64_t ctime) {
   /*
    * Send buffer size stats
    */
   int bs = -1;
   int sz = sizeof(bs);
   int ret = srt_getsockflag(sock, SRTO_SNDDATA, &bs, &sz);
-  if (ret != 0 || bs < 0) goto ret;
+  if (ret != 0 || bs < 0) return;
 
   // Rolling average
   static double bs_avg = 0;
@@ -202,10 +201,7 @@ gboolean update_bitrate() {
   /*
    * RTT stats
    */
-  SRT_TRACEBSTATS stats;
-  ret = srt_bstats(sock, &stats, 1);
-  if (ret != 0) goto ret;
-  int rtt = (int)stats.msRTT;
+  int rtt = (int)stats->msRTT;
 
   // Update the average RTT
   static double rtt_avg = 0;
@@ -242,7 +238,7 @@ gboolean update_bitrate() {
    */
   static double throughput = 0.0;
   throughput *= 0.97;
-  throughput += ((double)stats.mbpsSendRate * 1000.0 * 1000.0 / 1024.0) * 0.03;
+  throughput += ((double)stats->mbpsSendRate * 1000.0 * 1000.0 / 1024.0) * 0.03;
 
 
   debug("bs: %d bs_avg: %f, bs_jitter %f, bitrate %d rtt %d, delta rtt %.0f, avg delta %.1f, avg rtt %.1f, rtt_jitter, %.2f, rtt_min %.1f\n",
@@ -295,8 +291,36 @@ gboolean update_bitrate() {
 
     debug("set bitrate to %d, internal value %d\n", rounded_br, cur_bitrate);
   }
+}
 
-ret:
+gboolean connection_housekeeping() {
+  uint64_t ctime = getms();
+  static uint64_t prev_ack_ts = 0;
+  static uint64_t prev_ack_count = 0;
+
+  // SRT stats
+  SRT_TRACEBSTATS stats;
+  int ret = srt_bstats(sock, &stats, 1);
+  if (ret != 0) goto r;
+
+  // Track when the most recent ACK was received
+  if (stats.pktRecvACKTotal != prev_ack_count) {
+    prev_ack_count = stats.pktRecvACKTotal;
+    prev_ack_ts = ctime;
+  }
+  /* Manual check for connection timeout, because SRT is Pepega
+     and will fail to timeout if RTT was high */
+  if (prev_ack_count != 0 && (ctime - prev_ack_ts) > SRT_ACK_TIMEOUT) {
+    fprintf(stderr, "The SRT connection timed out, exiting\n");
+    stop();
+  }
+
+  // We can only update the bitrate when we have a configurable encoder
+  if (GST_IS_ELEMENT(encoder)) {
+    update_bitrate(&stats, ctime);
+  }
+
+r:
   return TRUE;
 }
 
@@ -323,20 +347,22 @@ GstFlowReturn new_buf_cb(GstAppSink *sink, gpointer user_data) {
 
     if (pkt_len == SRT_PKT_SIZE) {
       int nb = srt_send(sock, pkt, SRT_PKT_SIZE);
-      if (nb != SRT_PKT_SIZE) goto error;
+      if (nb != SRT_PKT_SIZE) {
+        fprintf(stderr, "The SRT connection failed, exiting\n");
+        stop();
+        goto ret;
+      }
       pkt_len = 0;
     }
 
     sample_sz -= copy_sz;
   } while(sample_sz);
 
+ret:
   gst_buffer_unmap(buffer, &map);
   gst_sample_unref (sample);
 
   return GST_FLOW_OK;
-
-error:
-  return GST_FLOW_ERROR;
 }
 
 int parse_ip(struct sockaddr_in *addr, char *ip_str) {
@@ -685,9 +711,9 @@ int main(int argc, char** argv) {
     } while(ret_srt != 0);
   }
 
-  // We can only update the bitrate when we have an appsink and a configurable encoder
-  if (GST_IS_ELEMENT(encoder) && GST_IS_ELEMENT(srt_app_sink)) {
-    g_timeout_add(BITRATE_UPDATE_INT, update_bitrate, NULL);
+  // We can only monitor the connection when we use an appsink
+  if (GST_IS_ELEMENT(srt_app_sink)) {
+    g_timeout_add(BITRATE_UPDATE_INT, connection_housekeeping, NULL);
   }
 
   /*
