@@ -615,6 +615,10 @@ int main(int argc, char** argv) {
     exit(EXIT_FAILURE);
   }
   int len = lseek(pipeline_fd, 0, SEEK_END);
+  if (len == 0) {
+    fprintf(stderr, "The pipeline file is empty, exiting\n");
+    exit(EXIT_FAILURE);
+  }
   char *launch_string = mmap(0, len, PROT_READ, MAP_PRIVATE, pipeline_fd, 0);
   fprintf(stderr, "Gstreamer pipeline: %s\n", launch_string);
 
