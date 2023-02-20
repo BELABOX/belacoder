@@ -1,0 +1,4 @@
+alsasrc device=hw:2 ! volume volume=1.0 ! 
+audioconvert ! voaacenc bitrate=128000 ! aacparse ! queue max-size-time=10000000000 max-size-buffers=1000 ! mux. 
+mpegtsmux name=mux ! 
+appsink name=appsink
