@@ -533,10 +533,9 @@ static void cb_ptsfixup(GstElement *identity, GstBuffer *buffer, gpointer data) 
              __FUNCTION__, GST_BUFFER_PTS(buffer), pts, incr, diff, period);
       GST_BUFFER_PTS(buffer) = pts;
     } else {
-      // TODO: actually drop this frame
       debug("skipping frame: pts %lu, prev pts %lu, output pts: %lu, diff %ld\n",
              input_pts, prev_pts, pts, diff);
-      GST_BUFFER_PTS(buffer) = 0;
+      GST_BUFFER_FLAG_SET(buffer, GST_BUFFER_FLAG_DROPPABLE);
     }
   }
 
