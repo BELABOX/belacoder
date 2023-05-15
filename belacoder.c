@@ -28,7 +28,7 @@
 
 #include <srt.h>
 
-#define SRT_MAX_OHEAD 0     // maximum SRT transmission overhead (when using appsink)
+#define SRT_MAX_OHEAD 20     // maximum SRT transmission overhead (when using appsink)
 #define SRT_ACK_TIMEOUT 6000 // maximum interval between received ACKs before the connection is TOed
 
 #define MIN_BITRATE (300 * 1000)
