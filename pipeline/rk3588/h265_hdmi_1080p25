@@ -1,0 +1,10 @@
+v4l2src device=/dev/video0 !
+identity name=v_delay signal-handoffs=TRUE !
+videorate ! video/x-raw,framerate=25/1 !
+textoverlay text='' valignment=top halignment=right font-desc="Monospace, 5" name=overlay ! queue !
+mpph265enc qp-max=51 gop=50 width=1920 height=1080 name=venc_bps !
+h265parse config-interval=-1 ! queue max-size-time=10000000000 max-size-buffers=1000 max-size-bytes=41943040 ! mux.
+alsasrc device=hw:CARD=rockchiphdmiin ! identity name=a_delay signal-handoffs=TRUE ! volume volume=1.0 !
+audioconvert ! voaacenc bitrate=128000 ! aacparse ! queue max-size-time=10000000000 max-size-buffers=1000 ! mux.
+mpegtsmux name=mux !
+appsink name=appsink
