@@ -1,6 +1,6 @@
 videotestsrc ! video/x-raw,width=1920,height=1080,framerate=30/1,format=NV12 ! queue !
 textoverlay text='' valignment=top halignment=right font-desc="Monospace, 5" name=overlay ! queue !
-mpph265enc qp-max=51 gop=60 name=venc_bps !
+mpph265enc zero-copy-pkt=0 qp-max=51 gop=60 name=venc_bps !
 h265parse config-interval=-1 ! queue max-size-time=10000000000 max-size-buffers=1000 max-size-bytes=41943040 ! mux.
 audiotestsrc ! audio/x-raw,channels=2,rate=48000 !
 voaacenc bitrate=128000 ! aacparse ! queue max-size-time=10000000000 max-size-buffers=1000 ! mux.
