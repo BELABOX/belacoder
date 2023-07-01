@@ -1,0 +1,14 @@
+rtmpsrc location=rtmp://127.0.0.1/publish/live !
+flvdemux name=demux
+
+demux.video ! identity name=v_delay signal-handoffs=TRUE ! h264parse ! mppvideodec !
+videorate ! video/x-raw,framerate=50/1,format=NV12 !
+textoverlay text='' valignment=top halignment=right font-desc="Monospace, 5" name=overlay ! queue !
+mpph265enc zero-copy-pkt=0 qp-max=51 gop=100 name=venc_bps !
+h265parse config-interval=-1 ! queue max-size-time=10000000000 max-size-buffers=1000 max-size-bytes=41943040 ! mux.
+
+demux.audio ! aacparse ! avdec_aac ! identity name=a_delay signal-handoffs=TRUE !
+audioconvert ! voaacenc bitrate=128000 ! aacparse ! queue max-size-time=10000000000 max-size-buffers=1000 ! mux.
+
+mpegtsmux name=mux !
+appsink name=appsink
