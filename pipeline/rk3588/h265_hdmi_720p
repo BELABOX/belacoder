@@ -1,4 +1,4 @@
-v4l2src device=/dev/video0 ! identity name=ptsfixup signal-handoffs=TRUE ! identity drop-buffer-flags=GST_BUFFER_FLAG_DROPPABLE !
+v4l2src device=/dev/hdmirx ! identity name=ptsfixup signal-handoffs=TRUE ! identity drop-buffer-flags=GST_BUFFER_FLAG_DROPPABLE !
 identity name=v_delay signal-handoffs=TRUE !
 textoverlay text='' valignment=top halignment=right font-desc="Monospace, 5" name=overlay ! queue !
 mpph265enc zero-copy-pkt=0 qp-max=51 gop=120 width=1280 height=720 name=venc_bps !
