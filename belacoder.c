@@ -736,11 +736,17 @@ int main(int argc, char** argv) {
   // Everything good so far, start the gstreamer pipeline
   gst_element_set_state((GstElement*)gst_pipeline, GST_STATE_PLAYING);
   g_main_loop_run(loop);
-  gst_element_set_state((GstElement*)gst_pipeline, GST_STATE_NULL);
 
+  /*
+    Close the SRT socket, if connected
+    This must be done before trying to stop the pipeline, as the latter
+    may block, causing cb_sigalarm to terminate the process
+  */
   if (sock >= 0) {
     srt_close(sock);
   }
+
+  gst_element_set_state((GstElement*)gst_pipeline, GST_STATE_NULL);
 
   return 0;
 }
