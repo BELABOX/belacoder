@@ -327,10 +327,10 @@ r:
 GstFlowReturn new_buf_cb(GstAppSink *sink, gpointer user_data) {
   static char pkt[SRT_PKT_SIZE];
   static int pkt_len = 0;
+  GstFlowReturn code = GST_FLOW_OK;
 
   GstSample *sample = gst_app_sink_pull_sample(sink);
-
-  if (!sample) exit(EXIT_FAILURE);
+  if (!sample) return GST_FLOW_ERROR;
 
   GstBuffer *buffer = NULL;
   GstMapInfo map = {0};
@@ -360,9 +360,9 @@ GstFlowReturn new_buf_cb(GstAppSink *sink, gpointer user_data) {
 
 ret:
   gst_buffer_unmap(buffer, &map);
-  gst_sample_unref (sample);
+  gst_sample_unref(sample);
 
-  return GST_FLOW_OK;
+  return code;
 }
 
 int parse_ip(struct sockaddr_in *addr, char *ip_str) {
