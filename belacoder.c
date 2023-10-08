@@ -27,6 +27,7 @@
 #include <glib-unix.h>
 
 #include <srt.h>
+#include <srt/access_control.h>
 
 #define SRT_MAX_OHEAD 20     // maximum SRT transmission overhead (when using appsink)
 #define SRT_ACK_TIMEOUT 6000 // maximum interval between received ACKs before the connection is TOed
@@ -438,6 +439,7 @@ int connect_srt(char *host, char *port, char *stream_id) {
               host, port, srt_latency);
       break;
     }
+    connected = srt_getrejectreason(sock);
   }
   freeaddrinfo(addrs);
 
@@ -711,7 +713,28 @@ int main(int argc, char** argv) {
     do {
       ret_srt = connect_srt(srt_host, srt_port, stream_id);
       if (ret_srt != 0) {
-        fprintf(stderr, "Failed to establish an SRT connection. Retrying...\n");
+        char *reason = NULL;
+        switch (ret_srt) {
+          case SRT_REJ_TIMEOUT:
+            reason = "connection timed out";
+            break;
+          case SRT_REJX_CONFLICT:
+            reason = "streamid already in use";
+            break;
+          case SRT_REJX_FORBIDDEN:
+            reason = "invalid streamid";
+            break;
+          case -1:
+            reason = "failed to resolve address";
+            break;
+          case -2:
+            reason = "failed to open the SRT socket";
+            break;
+          default:
+            reason = "unknown";
+            break;
+        }
+        fprintf(stderr, "Failed to establish an SRT connection: %s. Retrying...\n", reason);
         usleep(500*1000);
       }
     } while(ret_srt != 0);
