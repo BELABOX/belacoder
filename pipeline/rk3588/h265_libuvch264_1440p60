@@ -1,5 +1,5 @@
-libuvch264src index=0 ! video/x-h264,framerate=60/1 !
-queue max-size-time=10000000000 max-size-buffers=1000 max-size-bytes=41943040 ! mppvideodec width=2560 height=1440 !
+libuvch264src index=0 ! video/x-h264,framerate=60/1 ! queue !
+mppvideodec width=2560 height=1440 ! queue !
 identity name=v_delay signal-handoffs=TRUE !
 textoverlay text='' valignment=top halignment=right font-desc="Monospace, 5" name=overlay ! queue !
 mpph265enc zero-copy-pkt=0 qp-max=51 gop=60 name=venc_bps !
