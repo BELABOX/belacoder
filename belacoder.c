@@ -764,7 +764,7 @@ int main(int argc, char** argv) {
   signal(SIGTERM, stop);
   signal(SIGINT, stop);
   signal(SIGALRM, cb_sigalarm);
-  g_timeout_add(1000, stall_check, NULL); // check every second
+  g_timeout_add(2000, stall_check, NULL); // check every second
 
   // Everything good so far, start the gstreamer pipeline
   gst_element_set_state((GstElement*)gst_pipeline, GST_STATE_PLAYING);
