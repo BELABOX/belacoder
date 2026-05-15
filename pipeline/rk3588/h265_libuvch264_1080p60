@@ -1,4 +1,4 @@
-libuvch264src index=0 ! video/x-h264,framerate=60/1 ! queue !
+libuvch26xsrc index=0 ! video/x-h264,framerate=60/1;video/x-h265,framerate=60/1 ! queue !
 mppvideodec width=1920 height=1080 ! queue !
 identity name=v_delay signal-handoffs=TRUE !
 textoverlay text='' valignment=top halignment=right font-desc="Monospace, 5" name=overlay ! queue !
