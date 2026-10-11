@@ -1,4 +1,4 @@
-libuvch264src ! video/x-h264,framerate=60/1 !
+libuvch26xsrc ! video/x-h264,framerate=60/1;video/x-h265,framerate=60/1 !
 queue max-size-time=10000000000 max-size-buffers=1000 max-size-bytes=41943040 ! nvv4l2decoder ! nvvidconv interpolation-method=5 !
 video/x-raw,width=2560,height=1440 !
 identity name=v_delay signal-handoffs=TRUE ! 

@@ -1,4 +1,4 @@
-libuvch264src !
+libuvch26xsrc !
 nvv4l2decoder ! nvvidconv interpolation-method=5 !
 identity name=v_delay signal-handoffs=TRUE ! 
 textoverlay text='' valignment=top halignment=right font-desc="Monospace, 5" name=overlay ! queue ! 
